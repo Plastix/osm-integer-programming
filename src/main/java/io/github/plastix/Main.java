@@ -6,12 +6,26 @@ import com.google.ortools.linearsolver.MPSolver;
 import com.google.ortools.linearsolver.MPVariable;
 import com.graphhopper.GraphHopper;
 import com.graphhopper.reader.osm.GraphHopperOSM;
+import com.graphhopper.routing.util.AllEdgesIterator;
 import com.graphhopper.routing.util.EncodingManager;
+import com.graphhopper.routing.weighting.Weighting;
 import com.graphhopper.storage.Graph;
 
 public class Main {
 
+    private static final String SOLVER_TYPE = "CBC_MIXED_INTEGER_PROGRAMMING";
+    private static final int MAX_COST = 40_000; // In meters
+    private static final int MIN_COST = 20_000; // In meters
+
+    private static final String RACE_BIKE_VEHICLE = "racingbike";
+    private static final String ENABLED_VEHICLES = RACE_BIKE_VEHICLE;
+    private static final EncodingManager encodingManager = new EncodingManager(ENABLED_VEHICLES);
+    private static final Weighting score = new BikePriorityWeighting(encodingManager.getEncoder(RACE_BIKE_VEHICLE));
+    private static Graph graph;
+    private static MPSolver solver;
+
     static {
+        // Load Google Optimization tools native libs
         System.loadLibrary("jniortools");
     }
 
@@ -24,31 +38,45 @@ public class Main {
         }
     }
 
-    private static void runOptimizer() {
-
-        String solverType = "CBC_MIXED_INTEGER_PROGRAMMING";
-
-        MPSolver solver = createSolver(solverType);
+    private static void setupSolver() {
+        solver = createSolver(SOLVER_TYPE);
         if(solver == null) {
-            System.out.println("Could not create solver " + solverType);
-            return;
+            System.out.println("Could not create solver " + SOLVER_TYPE);
+            System.exit(1);
         }
 
         double infinity = MPSolver.infinity();
-        // x1 and x2 are integer non-negative variables.
-        MPVariable x1 = solver.makeIntVar(0.0, infinity, "x1");
-        MPVariable x2 = solver.makeIntVar(0.0, infinity, "x2");
 
-        // Minimize x1 + 2 * x2.
+        AllEdgesIterator allEdges = graph.getAllEdges();
+        int numEdges = allEdges.getMaxId();
+
+        // Make a decision variable "x_a" for every edge in our graph
+        MPVariable[] xs = solver.makeBoolVarArray(numEdges);
+
+        // (1a)
         MPObjective objective = solver.objective();
-        objective.setCoefficient(x1, 1);
-        objective.setCoefficient(x2, 2);
+        objective.setMaximization(); // Maximize our objective (default is min)
 
-        // 2 * x2 + 3 * x1 >= 17.
-        MPConstraint ct = solver.makeConstraint(17, infinity);
-        ct.setCoefficient(x1, 3);
-        ct.setCoefficient(x2, 2);
+        // (1b)
+        MPConstraint maxCost = solver.makeConstraint(-infinity, MAX_COST);
 
+        int i = 0;
+        while(allEdges.next()) {
+            int edgeId = allEdges.getEdge();
+
+            // (1a)
+            // Objective maximizes total collected score of all roads
+            objective.setCoefficient(xs[i], score.calcWeight(allEdges, false, edgeId));
+
+            // (1b)
+            // Limit length of path
+            maxCost.setCoefficient(xs[i], allEdges.getDistance());
+
+            i++;
+        }
+    }
+
+    private static void runSolver() {
         final MPSolver.ResultStatus resultStatus = solver.solve();
 
         // Check that the problem has an optimal solution.
@@ -69,28 +97,24 @@ public class Main {
 
         // The objective value of the solution.
         System.out.println("Optimal objective value = " + solver.objective().value());
-
-        // The value of each variable in the solution.
-        System.out.println("x1 = " + x1.solutionValue());
-        System.out.println("x2 = " + x2.solutionValue());
-
-        System.out.println("Advanced usage:");
-        System.out.println("Problem solved in " + solver.nodes() + " branch-and-bound nodes");
     }
 
     public static void main(String[] args) {
+        // Parse & Load Open Street Map data
         GraphHopper hopper = new GraphHopperOSM();
         hopper.setDataReaderFile("src/main/resources/ny_capital_district.pbf");
         hopper.setGraphHopperLocation("src/main/resources/ny_capital_district-gh/");
-        hopper.setEncodingManager(new EncodingManager("racingbike"));
+        hopper.setEncodingManager(encodingManager);
         System.out.println("Loading graph!");
         hopper.importOrLoad();
 
-        Graph graph = hopper.getGraphHopperStorage().getBaseGraph();
+        graph = hopper.getGraphHopperStorage().getBaseGraph();
         System.out.println("Graph loaded!");
 
+        // Solve integer programming problem
         System.out.println("---- Running integer programming optimizer with CBC ----");
-        runOptimizer();
+        setupSolver();
+        runSolver();
     }
 
 }
