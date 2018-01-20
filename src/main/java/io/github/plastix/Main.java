@@ -109,12 +109,14 @@ public class Main {
         GraphHopper hopper = new GraphHopperOSM();
         hopper.setDataReaderFile("src/main/resources/ny_capital_district.pbf");
         hopper.setGraphHopperLocation("src/main/resources/ny_capital_district-gh/");
+        hopper.forDesktop();
         hopper.setEncodingManager(encodingManager);
-        System.out.println("Loading graph!");
+        hopper.setCHEnabled(false);
         hopper.importOrLoad();
 
         graph = hopper.getGraphHopperStorage().getBaseGraph();
-        System.out.println("Graph loaded!");
+        System.out.println(String.format("Graph loaded! Edges: %d Nodes: %d",
+                graph.getAllEdges().getMaxId(), graph.getNodes()));
 
         // Solve integer programming problem
         System.out.println("---- Running integer programming optimizer with CBC ----");
