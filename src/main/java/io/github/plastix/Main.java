@@ -14,8 +14,10 @@ import com.graphhopper.storage.Graph;
 public class Main {
 
     private static final String SOLVER_TYPE = "CBC_MIXED_INTEGER_PROGRAMMING";
+    // TODO (Aidan) Read these params from file
     private static final int MAX_COST = 40_000; // In meters
     private static final int MIN_COST = 20_000; // In meters
+    private static final int START_NODE = -1; // TODO (Aidan)
 
     private static final String RACE_BIKE_VEHICLE = "racingbike";
     private static final String ENABLED_VEHICLES = RACE_BIKE_VEHICLE;
@@ -49,9 +51,15 @@ public class Main {
 
         AllEdgesIterator allEdges = graph.getAllEdges();
         int numEdges = allEdges.getMaxId();
+        int numNodes = graph.getNodes();
 
         // Make a decision variable "x_a" for every edge in our graph
-        MPVariable[] xs = solver.makeBoolVarArray(numEdges);
+        // x_a: =1 if arc is travelled, 0 otherwise
+        MPVariable[] x_a = solver.makeBoolVarArray(numEdges);
+
+        // Make a variable for every node in the graph
+        // z_v: = the number of times vertex v is visited
+        MPVariable[] z_v = solver.makeIntVarArray(numNodes, 0, infinity);
 
         // (1a)
         MPObjective objective = solver.objective();
@@ -60,19 +68,16 @@ public class Main {
         // (1b)
         MPConstraint maxCost = solver.makeConstraint(-infinity, MAX_COST);
 
-        int i = 0;
         while(allEdges.next()) {
             int edgeId = allEdges.getEdge();
 
             // (1a)
             // Objective maximizes total collected score of all roads
-            objective.setCoefficient(xs[i], score.calcWeight(allEdges, false, edgeId));
+            objective.setCoefficient(x_a[edgeId], score.calcWeight(allEdges, false, edgeId));
 
             // (1b)
             // Limit length of path
-            maxCost.setCoefficient(xs[i], allEdges.getDistance());
-
-            i++;
+            maxCost.setCoefficient(x_a[edgeId], allEdges.getDistance());
         }
     }
 
@@ -114,7 +119,7 @@ public class Main {
         // Solve integer programming problem
         System.out.println("---- Running integer programming optimizer with CBC ----");
         setupSolver();
-        runSolver();
+//        runSolver();
     }
 
 }
