@@ -138,3 +138,7 @@ gradle-app.setting
 
 # Ignore GraphHopper generated files
 src/main/resources/ny_capital_district-gh
+
+# Commit Google Optimization Tools jars
+!/libs/protobuf.jar
+!/libs/com.google.ortools.jar
