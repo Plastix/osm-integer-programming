@@ -90,19 +90,24 @@ public class Main {
             // (1d)
             MPConstraint edgeCounts = solver.makeConstraint(0, 0);
             EdgeIterator incoming = incomingEdges(i);
-            // TODO (Aidan) This might cause problems since outgoing and incoming could be same
-            while(incoming.next()){
+            while(incoming.next()) {
                 edgeCounts.setCoefficient(x_a[incoming.getEdge()], 1);
             }
             EdgeIterator outgoing = outgoingEdges(i);
-            while(outgoing.next()){
-                edgeCounts.setCoefficient(x_a[outgoing.getEdge()], -1);
+            while(outgoing.next()) {
+                MPVariable edge = x_a[outgoing.getEdge()];
+                // Check if we already recorded it as an incoming edge
+                if(edgeCounts.getCoefficient(edge) == 1) {
+                    edgeCounts.setCoefficient(edge, 0);
+                } else {
+                    edgeCounts.setCoefficient(edge, -1);
+                }
             }
 
             // (1e)
             MPConstraint vertexVisits = solver.makeConstraint(0, 0);
             outgoing = outgoingEdges(i);
-            while(outgoing.next()){
+            while(outgoing.next()) {
                 vertexVisits.setCoefficient(x_a[outgoing.getEdge()], 1);
             }
             vertexVisits.setCoefficient(z_v[i], -1);
