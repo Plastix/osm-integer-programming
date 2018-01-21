@@ -8,8 +8,10 @@ import com.graphhopper.GraphHopper;
 import com.graphhopper.reader.osm.GraphHopperOSM;
 import com.graphhopper.routing.util.AllEdgesIterator;
 import com.graphhopper.routing.util.EncodingManager;
+import com.graphhopper.routing.util.FlagEncoder;
 import com.graphhopper.routing.weighting.Weighting;
 import com.graphhopper.storage.Graph;
+import com.graphhopper.util.EdgeIterator;
 
 public class Main {
 
@@ -17,13 +19,16 @@ public class Main {
     // TODO (Aidan) Read these params from file
     private static final int MAX_COST = 40_000; // In meters
     private static final int MIN_COST = 20_000; // In meters
-    private static final int START_NODE = -1; // TODO (Aidan)
-
+    // TODO (Aidan) Maybe convert this from lat/lon?
+    private static final int START_NODE_ID = 834911;
     private static final String RACE_BIKE_VEHICLE = "racingbike";
     private static final String ENABLED_VEHICLES = RACE_BIKE_VEHICLE;
-    private static final EncodingManager encodingManager = new EncodingManager(ENABLED_VEHICLES);
-    private static final Weighting score = new BikePriorityWeighting(encodingManager.getEncoder(RACE_BIKE_VEHICLE));
+
     private static Graph graph;
+    private static final EncodingManager encodingManager = new EncodingManager(ENABLED_VEHICLES);
+    private static final FlagEncoder flagEncoder = encodingManager.getEncoder(RACE_BIKE_VEHICLE);
+    private static final Weighting score = new BikePriorityWeighting(flagEncoder);
+
     private static MPSolver solver;
 
     static {
@@ -79,7 +84,39 @@ public class Main {
             // Limit length of path
             maxCost.setCoefficient(x_a[edgeId], allEdges.getDistance());
         }
+
+        for(int i = 0; i < numNodes; i++) {
+
+            // (1d)
+            MPConstraint edgeCounts = solver.makeConstraint(0, 0);
+            EdgeIterator incoming = incomingEdges(i);
+            // TODO (Aidan) This might cause problems since outgoing and incoming could be same
+            while(incoming.next()){
+                edgeCounts.setCoefficient(x_a[incoming.getEdge()], 1);
+            }
+            EdgeIterator outgoing = outgoingEdges(i);
+            while(outgoing.next()){
+                edgeCounts.setCoefficient(x_a[outgoing.getEdge()], -1);
+            }
+
+            // (1e)
+            MPConstraint vertexVisits = solver.makeConstraint(0, 0);
+            outgoing = outgoingEdges(i);
+            while(outgoing.next()){
+                vertexVisits.setCoefficient(x_a[outgoing.getEdge()], 1);
+            }
+            vertexVisits.setCoefficient(z_v[i], -1);
+        }
     }
+
+    private static EdgeIterator outgoingEdges(int node) {
+        return graph.createEdgeExplorer(edgeState -> edgeState.isForward(flagEncoder)).setBaseNode(node);
+    }
+
+    private static EdgeIterator incomingEdges(int node) {
+        return graph.createEdgeExplorer(edgeState -> edgeState.isBackward(flagEncoder)).setBaseNode(node);
+    }
+
 
     private static void runSolver() {
         final MPSolver.ResultStatus resultStatus = solver.solve();
