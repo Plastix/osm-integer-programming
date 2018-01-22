@@ -20,15 +20,21 @@ public class Main {
     private static final int MAX_COST = 40_000; // In meters
     private static final int MIN_COST = 20_000; // In meters
     // TODO (Aidan) Maybe convert this from lat/lon?
-    private static final int START_NODE_ID = 834911;
+    private static final int START_NODE_ID = 0;
     private static final String RACE_BIKE_VEHICLE = "racingbike";
     private static final String ENABLED_VEHICLES = RACE_BIKE_VEHICLE;
 
+    // Graph variables
     private static Graph graph;
     private static GraphUtils graphUtils;
     private static Weighting score;
+    private static FlagEncoder flagEncoder;
 
+    // Optimization variables
     private static MPSolver solver;
+    private static MPVariable[] arcsFwd;
+    private static MPVariable[] arcsBwd;
+    private static int[] arcBaseIds;
 
     static {
         // Load Google Optimization tools native libs
@@ -53,54 +59,75 @@ public class Main {
 
         double infinity = MPSolver.infinity();
 
-        AllEdgesIterator allEdges = graph.getAllEdges();
-        int numEdges = allEdges.getMaxId();
+        AllEdgesIterator edges = graph.getAllEdges();
+        int numEdges = edges.getMaxId();
         int numNodes = graph.getNodes();
 
-        // Make a decision variable "x_a" for every edge in our graph
-        // x_a: =1 if arc is travelled, 0 otherwise
-        MPVariable[] x_a = solver.makeBoolVarArray(numEdges);
+        // Make a decision variable "x_i" for every arc in our graph
+        // x_i: =1 if arc is travelled, 0 otherwise
+        // Since every edge can be 2 arcs (forward + backward), we keep two lists
+        arcsFwd = solver.makeBoolVarArray(numEdges);
+        arcsBwd = solver.makeBoolVarArray(numEdges);
+        arcBaseIds = new int[numEdges];
 
         // Make a variable for every node in the graph
-        // z_v: = the number of times vertex v is visited
-        MPVariable[] z_v = solver.makeIntVarArray(numNodes, 0, infinity);
+        // verts[i]: = the number of times vertex i is visited
+        MPVariable[] verts = solver.makeIntVarArray(numNodes, 0, infinity);
 
         // (1a)
+        // Objective maximizes total collected score of all roads
         MPObjective objective = solver.objective();
-        objective.setMaximization(); // Maximize our objective (default is min)
+        objective.setMaximization();
 
         // (1b)
+        // Limit length of path
         MPConstraint maxCost = solver.makeConstraint(-infinity, MAX_COST);
 
-        while(allEdges.next()) {
-            // TODO (Aidan) We actually need to check whether our vehicle can traverse the edge
-            int edgeId = allEdges.getEdge();
+        while(edges.next()) {
+            int edgeId = edges.getEdge();
+            arcBaseIds[edgeId] = edges.getBaseNode(); // Record the original base ID to keep direction
+            MPVariable fwd = arcsFwd[edgeId];
+            MPVariable bwd = arcsBwd[edgeId];
+            double edgeScore = score.calcWeight(edges, false, edgeId);
+            double edgeDist = edges.getDistance();
 
-            // (1a)
-            // Objective maximizes total collected score of all roads
-            objective.setCoefficient(x_a[edgeId], score.calcWeight(allEdges, false, edgeId));
 
-            // (1b)
-            // Limit length of path
-            maxCost.setCoefficient(x_a[edgeId], allEdges.getDistance());
+            if(edges.isForward(flagEncoder)) {
+                objective.setCoefficient(fwd, edgeScore);
+                maxCost.setCoefficient(fwd, edgeDist);
+            } else {
+                fwd.setInteger(false);
+            }
+
+            if(edges.isBackward(flagEncoder)) {
+                objective.setCoefficient(bwd, edgeScore);
+                maxCost.setCoefficient(bwd, edgeDist);
+            } else {
+                bwd.setInteger(false);
+            }
+
+            // (1j)
+            MPConstraint arcConstraint = solver.makeConstraint(-infinity, 1);
+            arcConstraint.setCoefficient(fwd, 1);
+            arcConstraint.setCoefficient(bwd, 1);
         }
 
         for(int i = 0; i < numNodes; i++) {
-
             // (1d)
             MPConstraint edgeCounts = solver.makeConstraint(0, 0);
             EdgeIterator incoming = graphUtils.incomingEdges(i);
             while(incoming.next()) {
-                edgeCounts.setCoefficient(x_a[incoming.getEdge()], 1);
+                edgeCounts.setCoefficient(getArc(incoming), 1);
             }
+
             EdgeIterator outgoing = graphUtils.outgoingEdges(i);
             while(outgoing.next()) {
-                MPVariable edge = x_a[outgoing.getEdge()];
+                MPVariable arc = getArc(outgoing);
                 // Check if we already recorded it as an incoming edge
-                if(edgeCounts.getCoefficient(edge) == 1) {
-                    edgeCounts.setCoefficient(edge, 0);
+                if(edgeCounts.getCoefficient(arc) == 1) {
+                    edgeCounts.setCoefficient(arc, 0);
                 } else {
-                    edgeCounts.setCoefficient(edge, -1);
+                    edgeCounts.setCoefficient(arc, -1);
                 }
             }
 
@@ -108,12 +135,26 @@ public class Main {
             MPConstraint vertexVisits = solver.makeConstraint(0, 0);
             outgoing = graphUtils.outgoingEdges(i);
             while(outgoing.next()) {
-                vertexVisits.setCoefficient(x_a[outgoing.getEdge()], 1);
+                vertexVisits.setCoefficient(getArc(outgoing), 1);
             }
-            vertexVisits.setCoefficient(z_v[i], -1);
+            vertexVisits.setCoefficient(verts[i], -1);
         }
+
+        // (1h)/(1i)
+        // Start vertex can only be visited once
+        MPVariable startNode = verts[START_NODE_ID];
+        startNode.setBounds(1, 1);
     }
 
+    private static MPVariable getArc(EdgeIterator edge) {
+        int edgeId = edge.getEdge();
+        int baseNode = edge.getBaseNode();
+        if(baseNode == arcBaseIds[edgeId]) {
+            return arcsFwd[edgeId];
+        } else {
+            return arcsBwd[edgeId];
+        }
+    }
 
     private static void runSolver() {
         final MPSolver.ResultStatus resultStatus = solver.solve();
@@ -151,7 +192,7 @@ public class Main {
         hopper.importOrLoad();
 
         graph = hopper.getGraphHopperStorage().getBaseGraph();
-        FlagEncoder flagEncoder = encodingManager.getEncoder(RACE_BIKE_VEHICLE);
+        flagEncoder = encodingManager.getEncoder(RACE_BIKE_VEHICLE);
         score = new BikePriorityWeighting(flagEncoder);
         graphUtils = new GraphUtils(graph, flagEncoder);
 
