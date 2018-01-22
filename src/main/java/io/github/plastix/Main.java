@@ -25,9 +25,8 @@ public class Main {
     private static final String ENABLED_VEHICLES = RACE_BIKE_VEHICLE;
 
     private static Graph graph;
-    private static final EncodingManager encodingManager = new EncodingManager(ENABLED_VEHICLES);
-    private static final FlagEncoder flagEncoder = encodingManager.getEncoder(RACE_BIKE_VEHICLE);
-    private static final Weighting score = new BikePriorityWeighting(flagEncoder);
+    private static GraphUtils graphUtils;
+    private static Weighting score;
 
     private static MPSolver solver;
 
@@ -74,6 +73,7 @@ public class Main {
         MPConstraint maxCost = solver.makeConstraint(-infinity, MAX_COST);
 
         while(allEdges.next()) {
+            // TODO (Aidan) We actually need to check whether our vehicle can traverse the edge
             int edgeId = allEdges.getEdge();
 
             // (1a)
@@ -89,11 +89,11 @@ public class Main {
 
             // (1d)
             MPConstraint edgeCounts = solver.makeConstraint(0, 0);
-            EdgeIterator incoming = incomingEdges(i);
+            EdgeIterator incoming = graphUtils.incomingEdges(i);
             while(incoming.next()) {
                 edgeCounts.setCoefficient(x_a[incoming.getEdge()], 1);
             }
-            EdgeIterator outgoing = outgoingEdges(i);
+            EdgeIterator outgoing = graphUtils.outgoingEdges(i);
             while(outgoing.next()) {
                 MPVariable edge = x_a[outgoing.getEdge()];
                 // Check if we already recorded it as an incoming edge
@@ -106,20 +106,12 @@ public class Main {
 
             // (1e)
             MPConstraint vertexVisits = solver.makeConstraint(0, 0);
-            outgoing = outgoingEdges(i);
+            outgoing = graphUtils.outgoingEdges(i);
             while(outgoing.next()) {
                 vertexVisits.setCoefficient(x_a[outgoing.getEdge()], 1);
             }
             vertexVisits.setCoefficient(z_v[i], -1);
         }
-    }
-
-    private static EdgeIterator outgoingEdges(int node) {
-        return graph.createEdgeExplorer(edgeState -> edgeState.isForward(flagEncoder)).setBaseNode(node);
-    }
-
-    private static EdgeIterator incomingEdges(int node) {
-        return graph.createEdgeExplorer(edgeState -> edgeState.isBackward(flagEncoder)).setBaseNode(node);
     }
 
 
@@ -146,19 +138,39 @@ public class Main {
         System.out.println("Optimal objective value = " + solver.objective().value());
     }
 
-    public static void main(String[] args) {
-        // Parse & Load Open Street Map data
+    private static void loadOSM() {
+        System.out.println("---- Starting GraphHopper ----");
         GraphHopper hopper = new GraphHopperOSM();
         hopper.setDataReaderFile("src/main/resources/ny_capital_district.pbf");
         hopper.setGraphHopperLocation("src/main/resources/ny_capital_district-gh/");
         hopper.forDesktop();
+
+        EncodingManager encodingManager = new EncodingManager(ENABLED_VEHICLES);
         hopper.setEncodingManager(encodingManager);
         hopper.setCHEnabled(false);
         hopper.importOrLoad();
 
         graph = hopper.getGraphHopperStorage().getBaseGraph();
-        System.out.println(String.format("Graph loaded! Edges: %d Nodes: %d",
-                graph.getAllEdges().getMaxId(), graph.getNodes()));
+        FlagEncoder flagEncoder = encodingManager.getEncoder(RACE_BIKE_VEHICLE);
+        score = new BikePriorityWeighting(flagEncoder);
+        graphUtils = new GraphUtils(graph, flagEncoder);
+
+        AllEdgesIterator edges = graph.getAllEdges();
+        int nonTraversable = 0;
+        int oneWay = 0;
+        while(edges.next()) {
+            if(!graphUtils.isTraversable(edges)) nonTraversable++;
+            if(graphUtils.isOneWay(edges)) oneWay++;
+        }
+
+        System.out.println("\n---- OSM Graph Loaded ----");
+        System.out.println(String.format("Edges: %d\nNodes: %d\nNon-traversable edges: %d\nOne-way edges: %d\n",
+                graph.getAllEdges().getMaxId(), graph.getNodes(), nonTraversable, oneWay));
+    }
+
+    public static void main(String[] args) {
+        // Parse & Load Open Street Map data
+        loadOSM();
 
         // Solve integer programming problem
         System.out.println("---- Running integer programming optimizer with CBC ----");
