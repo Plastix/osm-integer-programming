@@ -15,7 +15,7 @@ import com.graphhopper.util.EdgeIterator;
 
 public class Main {
 
-    private static final String SOLVER_TYPE = "CBC_MIXED_INTEGER_PROGRAMMING";
+    private static final String SOLVER_TYPE = "GLPK_MIXED_INTEGER_PROGRAMMING";
     // TODO (Aidan) Read these params from file
     private static final int MAX_COST = 40_000; // In meters
     private static final int MIN_COST = 20_000; // In meters
@@ -157,6 +157,9 @@ public class Main {
     }
 
     private static void runSolver() {
+        System.out.println("Number of constraints: " + solver.numConstraints());
+        System.out.println("Number of variables: " + solver.numVariables());
+
         final MPSolver.ResultStatus resultStatus = solver.solve();
 
         // Check that the problem has an optimal solution.
@@ -214,9 +217,9 @@ public class Main {
         loadOSM();
 
         // Solve integer programming problem
-        System.out.println("---- Running integer programming optimizer with CBC ----");
+        System.out.println("---- Running integer programming optimizer ----");
         setupSolver();
-//        runSolver();
+        runSolver();
     }
 
 }
