@@ -7,11 +7,14 @@ import com.google.ortools.linearsolver.MPVariable;
 import com.graphhopper.GraphHopper;
 import com.graphhopper.reader.osm.GraphHopperOSM;
 import com.graphhopper.routing.util.AllEdgesIterator;
+import com.graphhopper.routing.util.DefaultEdgeFilter;
 import com.graphhopper.routing.util.EncodingManager;
 import com.graphhopper.routing.util.FlagEncoder;
 import com.graphhopper.routing.weighting.Weighting;
 import com.graphhopper.storage.Graph;
+import com.graphhopper.storage.index.QueryResult;
 import com.graphhopper.util.EdgeIterator;
+import com.graphhopper.util.shapes.GHPoint;
 
 public class Main {
 
@@ -19,8 +22,8 @@ public class Main {
     // TODO (Aidan) Read these params from file
     private static final int MAX_COST = 40_000; // In meters
     private static final int MIN_COST = 20_000; // In meters
-    // TODO (Aidan) Maybe convert this from lat/lon?
-    private static final int START_NODE_ID = 0;
+    private static final GHPoint START_POSITION = new GHPoint(43.009449, -74.006824);
+    private static int START_NODE_ID;
     private static final String RACE_BIKE_VEHICLE = "racingbike";
     private static final String ENABLED_VEHICLES = RACE_BIKE_VEHICLE;
 
@@ -157,6 +160,8 @@ public class Main {
     }
 
     private static void runSolver() {
+        System.out.println("Max cost: " + MAX_COST);
+        System.out.println("Start position: " + START_POSITION + " (Node " + START_NODE_ID + ")");
         System.out.println("Number of constraints: " + solver.numConstraints());
         System.out.println("Number of variables: " + solver.numVariables());
 
@@ -198,6 +203,16 @@ public class Main {
         flagEncoder = encodingManager.getEncoder(RACE_BIKE_VEHICLE);
         score = new BikePriorityWeighting(flagEncoder);
         graphUtils = new GraphUtils(graph, flagEncoder);
+
+        QueryResult result = hopper.getLocationIndex().findClosest(START_POSITION.lat, START_POSITION.lon,
+                new DefaultEdgeFilter(flagEncoder));
+        if(!result.isValid()) {
+            System.out.println("Unable to find starting node near lat/lon points!");
+            System.exit(1);
+
+        }
+
+        START_NODE_ID = result.getClosestNode();
 
         AllEdgesIterator edges = graph.getAllEdges();
         int nonTraversable = 0;
