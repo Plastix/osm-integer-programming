@@ -1,9 +1,6 @@
 package io.github.plastix;
 
-import com.google.ortools.linearsolver.MPConstraint;
-import com.google.ortools.linearsolver.MPObjective;
-import com.google.ortools.linearsolver.MPSolver;
-import com.google.ortools.linearsolver.MPVariable;
+import com.carrotsearch.hppc.IntHashSet;
 import com.graphhopper.GraphHopper;
 import com.graphhopper.reader.osm.GraphHopperOSM;
 import com.graphhopper.routing.util.AllEdgesIterator;
@@ -15,10 +12,12 @@ import com.graphhopper.storage.Graph;
 import com.graphhopper.storage.index.QueryResult;
 import com.graphhopper.util.EdgeIterator;
 import com.graphhopper.util.shapes.GHPoint;
+import gurobi.*;
+
+import java.util.Arrays;
 
 public class Main {
 
-    private static final String SOLVER_TYPE = "GLPK_MIXED_INTEGER_PROGRAMMING";
     // TODO (Aidan) Read these params from file
     private static final int MAX_COST = 40_000; // In meters
     private static final int MIN_COST = 20_000; // In meters
@@ -33,34 +32,14 @@ public class Main {
     private static Weighting score;
     private static FlagEncoder flagEncoder;
 
-    // Optimization variables
-    private static MPSolver solver;
-    private static MPVariable[] arcsFwd;
-    private static MPVariable[] arcsBwd;
+    private static GRBModel model;
+    private static GRBVar[] arcsFwd;
+    private static GRBVar[] arcsBwd;
     private static int[] arcBaseIds;
 
-    static {
-        // Load Google Optimization tools native libs
-        System.loadLibrary("jniortools");
-    }
-
-    private static MPSolver createSolver(String solverType) {
-        try {
-            return new MPSolver("osm-integer-programming",
-                    MPSolver.OptimizationProblemType.valueOf(solverType));
-        } catch(java.lang.IllegalArgumentException e) {
-            return null;
-        }
-    }
-
-    private static void setupSolver() {
-        solver = createSolver(SOLVER_TYPE);
-        if(solver == null) {
-            System.out.println("Could not create solver " + SOLVER_TYPE);
-            System.exit(1);
-        }
-
-        double infinity = MPSolver.infinity();
+    private static void setupSolver() throws GRBException {
+        GRBEnv env = new GRBEnv("osm.log");
+        model = new GRBModel(env);
 
         AllEdgesIterator edges = graph.getAllEdges();
         int numEdges = edges.getMaxId();
@@ -69,87 +48,98 @@ public class Main {
         // Make a decision variable "x_i" for every arc in our graph
         // x_i: =1 if arc is travelled, 0 otherwise
         // Since every edge can be 2 arcs (forward + backward), we keep two lists
-        arcsFwd = solver.makeBoolVarArray(numEdges);
-        arcsBwd = solver.makeBoolVarArray(numEdges);
+        arcsFwd = model.addVars(numEdges, GRB.BINARY);
+        arcsBwd = model.addVars(numEdges, GRB.BINARY);
         arcBaseIds = new int[numEdges];
 
         // Make a variable for every node in the graph
         // verts[i]: = the number of times vertex i is visited
-        MPVariable[] verts = solver.makeIntVarArray(numNodes, 0, infinity);
+        char[] types = new char[numNodes];
+        Arrays.fill(types, GRB.INTEGER);
+        GRBVar[] verts = model.addVars(null, null, null, types,
+                null, 0, numNodes);
 
         // (1a)
         // Objective maximizes total collected score of all roads
-        MPObjective objective = solver.objective();
-        objective.setMaximization();
+        GRBLinExpr objective = new GRBLinExpr();
 
         // (1b)
         // Limit length of path
-        MPConstraint maxCost = solver.makeConstraint(-infinity, MAX_COST);
+        GRBLinExpr maxCost = new GRBLinExpr();
 
         while(edges.next()) {
             int edgeId = edges.getEdge();
             arcBaseIds[edgeId] = edges.getBaseNode(); // Record the original base ID to keep direction
-            MPVariable fwd = arcsFwd[edgeId];
-            MPVariable bwd = arcsBwd[edgeId];
+            GRBVar fwd = arcsFwd[edgeId];
+            GRBVar bwd = arcsBwd[edgeId];
             double edgeScore = score.calcWeight(edges, false, edgeId);
             double edgeDist = edges.getDistance();
 
-
             if(edges.isForward(flagEncoder)) {
-                objective.setCoefficient(fwd, edgeScore);
-                maxCost.setCoefficient(fwd, edgeDist);
+                objective.addTerm(edgeScore, fwd);
+                maxCost.addTerm(edgeDist, fwd);
             } else {
-                fwd.setInteger(false);
+                fwd.set(GRB.DoubleAttr.UB, 0);
             }
 
             if(edges.isBackward(flagEncoder)) {
-                objective.setCoefficient(bwd, edgeScore);
-                maxCost.setCoefficient(bwd, edgeDist);
+                objective.addTerm(edgeScore, bwd);
+                maxCost.addTerm(edgeDist, bwd);
             } else {
-                bwd.setInteger(false);
+                bwd.set(GRB.DoubleAttr.UB, 0);
             }
 
             // (1j)
-            MPConstraint arcConstraint = solver.makeConstraint(-infinity, 1);
-            arcConstraint.setCoefficient(fwd, 1);
-            arcConstraint.setCoefficient(bwd, 1);
+            GRBLinExpr arcConstraint = new GRBLinExpr();
+            arcConstraint.addTerm(1, fwd);
+            arcConstraint.addTerm(1, bwd);
+            model.addConstr(arcConstraint, GRB.LESS_EQUAL, 1, "arc_constraint");
         }
+
+        model.setObjective(objective, GRB.MAXIMIZE);
+        model.addConstr(maxCost, GRB.LESS_EQUAL, MAX_COST, "max_cost");
 
         for(int i = 0; i < numNodes; i++) {
             // (1d)
-            MPConstraint edgeCounts = solver.makeConstraint(0, 0);
+            GRBLinExpr edgeCounts = new GRBLinExpr();
+            IntHashSet incomingIds = new IntHashSet();
             EdgeIterator incoming = graphUtils.incomingEdges(i);
             while(incoming.next()) {
-                edgeCounts.setCoefficient(getArc(incoming), 1);
+                incomingIds.add(incoming.getEdge());
+                edgeCounts.addTerm(1, getArc(incoming));
             }
 
             EdgeIterator outgoing = graphUtils.outgoingEdges(i);
             while(outgoing.next()) {
-                MPVariable arc = getArc(outgoing);
+                GRBVar arc = getArc(outgoing);
                 // Check if we already recorded it as an incoming edge
-                if(edgeCounts.getCoefficient(arc) == 1) {
-                    edgeCounts.setCoefficient(arc, 0);
+                if(incomingIds.contains(outgoing.getEdge())) {
+                    edgeCounts.remove(arc);
                 } else {
-                    edgeCounts.setCoefficient(arc, -1);
+                    edgeCounts.addTerm(-1, arc);
                 }
             }
 
+            model.addConstr(edgeCounts, GRB.EQUAL, 0, "edge_counts");
+
             // (1e)
-            MPConstraint vertexVisits = solver.makeConstraint(0, 0);
+            GRBLinExpr vertexVisits = new GRBLinExpr();
             outgoing = graphUtils.outgoingEdges(i);
             while(outgoing.next()) {
-                vertexVisits.setCoefficient(getArc(outgoing), 1);
+                vertexVisits.addTerm(1, getArc(outgoing));
             }
-            vertexVisits.setCoefficient(verts[i], -1);
+            vertexVisits.addTerm(-1, verts[i]);
+            model.addConstr(vertexVisits, GRB.EQUAL, 0, "vertex_visits");
         }
 
         // (1h)/(1i)
         // Start vertex can only be visited once
-        MPVariable startNode = verts[START_NODE_ID];
-        startNode.setBounds(1, 1);
+        GRBVar startNode = verts[START_NODE_ID];
+        startNode.set(GRB.DoubleAttr.LB, 1);
+        startNode.set(GRB.DoubleAttr.UB, 1);
     }
 
-    private static MPVariable getArc(EdgeIterator edge) {
+    private static GRBVar getArc(EdgeIterator edge) {
         int edgeId = edge.getEdge();
         int baseNode = edge.getBaseNode();
         if(baseNode == arcBaseIds[edgeId]) {
@@ -159,32 +149,11 @@ public class Main {
         }
     }
 
-    private static void runSolver() {
+    private static void runSolver() throws GRBException {
         System.out.println("Max cost: " + MAX_COST);
         System.out.println("Start position: " + START_POSITION + " (Node " + START_NODE_ID + ")");
-        System.out.println("Number of constraints: " + solver.numConstraints());
-        System.out.println("Number of variables: " + solver.numVariables());
 
-        final MPSolver.ResultStatus resultStatus = solver.solve();
-
-        // Check that the problem has an optimal solution.
-        if(resultStatus != MPSolver.ResultStatus.OPTIMAL) {
-            System.err.println("The problem does not have an optimal solution!");
-            return;
-        }
-
-        // Verify that the solution satisfies all constraints (when using solvers
-        // others than GLOP_LINEAR_PROGRAMMING, this is highly recommended!).
-        if(!solver.verifySolution(/*tolerance=*/1e-7, /*logErrors=*/true)) {
-            System.err.println("The solution returned by the solver violated the"
-                    + " problem constraints by at least 1e-7");
-            return;
-        }
-
-        System.out.println("Problem solved in " + solver.wallTime() + " milliseconds");
-
-        // The objective value of the solution.
-        System.out.println("Optimal objective value = " + solver.objective().value());
+        model.optimize();
     }
 
     private static void loadOSM() {
@@ -233,8 +202,13 @@ public class Main {
 
         // Solve integer programming problem
         System.out.println("---- Running integer programming optimizer ----");
-        setupSolver();
-        runSolver();
+        try {
+            setupSolver();
+            runSolver();
+        } catch(GRBException e) {
+            System.out.println("Error code: " + e.getErrorCode() + ". " +
+                    e.getMessage());
+        }
     }
 
 }

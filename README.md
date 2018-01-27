@@ -1,5 +1,5 @@
 # osm-integer-programming
-A program for calculating optimal cycling routes modelled as an integer program (known as the *Cycle Trip Planning Problem*). Mapping data is provided by [OpenStreetMaps](https://www.openstreetmap.org/#) and parsed by [GraphHopper](https://github.com/graphhopper/graphhopper). The integer program is solved using [Google Optimization Tools](https://developers.google.com/optimization/).
+A program for calculating optimal cycling routes modelled as an integer program (known as the *Cycle Trip Planning Problem*). Mapping data is provided by [OpenStreetMaps](https://www.openstreetmap.org/#) and parsed by [GraphHopper](https://github.com/graphhopper/graphhopper). The integer program is solved using [Gurobi](http://www.gurobi.com/)
 
 Mathemtical formulation of the Cycle Trip Planning Problem is from the following [paper](https://www.sciencedirect.com/science/article/pii/S1366554514000751):
 ```
