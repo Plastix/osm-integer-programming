@@ -29,21 +29,22 @@ public class Main {
     private static double START_LON;
     private static int START_NODE_ID;
     private static String VEHICLE;
-    private static String ENABLED_VEHICLES;
 
     // Graph variables
+    private static GraphHopper hopper;
     private static Graph graph;
     private static GraphUtils graphUtils;
     private static Weighting score;
     private static FlagEncoder flagEncoder;
 
+    private static GRBEnv env;
     private static GRBModel model;
     private static GRBVar[] arcsFwd;
     private static GRBVar[] arcsBwd;
     private static int[] arcBaseIds;
 
     private static void setupSolver() throws GRBException {
-        GRBEnv env = new GRBEnv("osm.log");
+        env = new GRBEnv("osm.log");
         model = new GRBModel(env);
 
         AllEdgesIterator edges = graph.getAllEdges();
@@ -159,16 +160,20 @@ public class Main {
         System.out.println("Start position: " + START_LAT + ", " + START_LON + " (Node " + START_NODE_ID + ")");
 
         model.optimize();
+
+        env.dispose();
+        model.dispose();
+        hopper.close();
     }
 
     private static void loadOSM() {
         System.out.println("---- Starting GraphHopper ----");
-        GraphHopper hopper = new GraphHopperOSM();
+        hopper = new GraphHopperOSM();
         hopper.setDataReaderFile(GRAPH_FILE);
         hopper.setGraphHopperLocation(GRAPH_FOLDER);
         hopper.forDesktop();
 
-        EncodingManager encodingManager = new EncodingManager(ENABLED_VEHICLES);
+        EncodingManager encodingManager = new EncodingManager(VEHICLE);
         hopper.setEncodingManager(encodingManager);
         hopper.setCHEnabled(false);
         hopper.importOrLoad();
@@ -220,9 +225,7 @@ public class Main {
         START_LON = Double.parseDouble(properties.getProperty("startLon"));
         MAX_COST = Double.parseDouble(properties.getProperty("maxCost"));
         VEHICLE = properties.getProperty("vehicle");
-        ENABLED_VEHICLES = VEHICLE;
     }
-
 
     public static void main(String[] args) {
         loadParams();
