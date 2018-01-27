@@ -11,20 +11,25 @@ import com.graphhopper.routing.weighting.Weighting;
 import com.graphhopper.storage.Graph;
 import com.graphhopper.storage.index.QueryResult;
 import com.graphhopper.util.EdgeIterator;
-import com.graphhopper.util.shapes.GHPoint;
 import gurobi.*;
 
+import java.io.FileInputStream;
+import java.io.FileNotFoundException;
+import java.io.IOException;
+import java.io.InputStream;
 import java.util.Arrays;
+import java.util.Properties;
 
 public class Main {
 
-    // TODO (Aidan) Read these params from file
-    private static final int MAX_COST = 40_000; // In meters
-    private static final int MIN_COST = 20_000; // In meters
-    private static final GHPoint START_POSITION = new GHPoint(43.009449, -74.006824);
+    private static String GRAPH_FILE;
+    private static String GRAPH_FOLDER;
+    private static double MAX_COST;
+    private static double START_LAT;
+    private static double START_LON;
     private static int START_NODE_ID;
-    private static final String RACE_BIKE_VEHICLE = "racingbike";
-    private static final String ENABLED_VEHICLES = RACE_BIKE_VEHICLE;
+    private static String VEHICLE;
+    private static String ENABLED_VEHICLES;
 
     // Graph variables
     private static Graph graph;
@@ -151,7 +156,7 @@ public class Main {
 
     private static void runSolver() throws GRBException {
         System.out.println("Max cost: " + MAX_COST);
-        System.out.println("Start position: " + START_POSITION + " (Node " + START_NODE_ID + ")");
+        System.out.println("Start position: " + START_LAT + ", " + START_LON + " (Node " + START_NODE_ID + ")");
 
         model.optimize();
     }
@@ -159,8 +164,8 @@ public class Main {
     private static void loadOSM() {
         System.out.println("---- Starting GraphHopper ----");
         GraphHopper hopper = new GraphHopperOSM();
-        hopper.setDataReaderFile("src/main/resources/ny_capital_district.pbf");
-        hopper.setGraphHopperLocation("src/main/resources/ny_capital_district-gh/");
+        hopper.setDataReaderFile(GRAPH_FILE);
+        hopper.setGraphHopperLocation(GRAPH_FOLDER);
         hopper.forDesktop();
 
         EncodingManager encodingManager = new EncodingManager(ENABLED_VEHICLES);
@@ -169,11 +174,11 @@ public class Main {
         hopper.importOrLoad();
 
         graph = hopper.getGraphHopperStorage().getBaseGraph();
-        flagEncoder = encodingManager.getEncoder(RACE_BIKE_VEHICLE);
+        flagEncoder = encodingManager.getEncoder(VEHICLE);
         score = new BikePriorityWeighting(flagEncoder);
         graphUtils = new GraphUtils(graph, flagEncoder);
 
-        QueryResult result = hopper.getLocationIndex().findClosest(START_POSITION.lat, START_POSITION.lon,
+        QueryResult result = hopper.getLocationIndex().findClosest(START_LAT, START_LON,
                 new DefaultEdgeFilter(flagEncoder));
         if(!result.isValid()) {
             System.out.println("Unable to find starting node near lat/lon points!");
@@ -196,7 +201,32 @@ public class Main {
                 graph.getAllEdges().getMaxId(), graph.getNodes(), nonTraversable, oneWay));
     }
 
+    private static void loadParams() {
+        Properties properties = new Properties();
+        InputStream inputStream = null;
+        try {
+            inputStream = new FileInputStream("src/main/resources/params.properties");
+            properties.load(inputStream);
+        } catch(FileNotFoundException e) {
+            System.out.println("No params file!");
+            e.printStackTrace();
+        } catch(IOException e) {
+            System.out.println("Error reading params!");
+            e.printStackTrace();
+        }
+        GRAPH_FILE = properties.getProperty("graphFile");
+        GRAPH_FOLDER = properties.getProperty("graphFolder");
+        START_LAT = Double.parseDouble(properties.getProperty("startLat"));
+        START_LON = Double.parseDouble(properties.getProperty("startLon"));
+        MAX_COST = Double.parseDouble(properties.getProperty("maxCost"));
+        VEHICLE = properties.getProperty("vehicle");
+        ENABLED_VEHICLES = VEHICLE;
+    }
+
+
     public static void main(String[] args) {
+        loadParams();
+
         // Parse & Load Open Street Map data
         loadOSM();
 
@@ -210,5 +240,4 @@ public class Main {
                     e.getMessage());
         }
     }
-
 }
