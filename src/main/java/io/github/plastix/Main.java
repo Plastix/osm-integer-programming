@@ -13,8 +13,6 @@ import com.graphhopper.storage.index.QueryResult;
 import com.graphhopper.util.EdgeIterator;
 import gurobi.*;
 
-import java.util.Arrays;
-
 public class Main {
 
     private static Params params;
@@ -27,33 +25,14 @@ public class Main {
     private static Weighting score;
     private static FlagEncoder flagEncoder;
 
+    // Solver variables
     private static GRBEnv env;
     private static GRBModel model;
-    private static GRBVar[] arcsFwd;
-    private static GRBVar[] arcsBwd;
-    private static int[] arcBaseIds;
 
     private static void setupSolver() throws GRBException {
         env = new GRBEnv("osm.log");
         model = new GRBModel(env);
-
-        AllEdgesIterator edges = graph.getAllEdges();
-        int numEdges = edges.getMaxId();
-        int numNodes = graph.getNodes();
-
-        // Make a decision variable "x_i" for every arc in our graph
-        // x_i: =1 if arc is travelled, 0 otherwise
-        // Since every edge can be 2 arcs (forward + backward), we keep two lists
-        arcsFwd = model.addVars(numEdges, GRB.BINARY);
-        arcsBwd = model.addVars(numEdges, GRB.BINARY);
-        arcBaseIds = new int[numEdges];
-
-        // Make a variable for every node in the graph
-        // verts[i]: = the number of times vertex i is visited
-        char[] types = new char[numNodes];
-        Arrays.fill(types, GRB.INTEGER);
-        GRBVar[] verts = model.addVars(null, null, null, types,
-                null, 0, numNodes);
+        Vars vars = new Vars(graph, model, flagEncoder);
 
         // (1a)
         // Objective maximizes total collected score of all roads
@@ -63,38 +42,30 @@ public class Main {
         // Limit length of path
         GRBLinExpr maxCost = new GRBLinExpr();
 
+        AllEdgesIterator edges = graph.getAllEdges();
         while(edges.next()) {
-            int edgeId = edges.getEdge();
-            arcBaseIds[edgeId] = edges.getBaseNode(); // Record the original base ID to keep direction
-            GRBVar fwd = arcsFwd[edgeId];
-            GRBVar bwd = arcsBwd[edgeId];
-            double edgeScore = score.calcWeight(edges, false, edgeId);
+            double edgeScore = score.calcWeight(edges, false, edges.getEdge());
             double edgeDist = edges.getDistance();
 
-            if(edges.isForward(flagEncoder)) {
-                objective.addTerm(edgeScore, fwd);
-                maxCost.addTerm(edgeDist, fwd);
-            } else {
-                fwd.set(GRB.DoubleAttr.UB, 0);
-            }
+            GRBVar forward = vars.getArc(edges);
+            GRBVar backward = vars.getComplementArc(edges);
 
-            if(edges.isBackward(flagEncoder)) {
-                objective.addTerm(edgeScore, bwd);
-                maxCost.addTerm(edgeDist, bwd);
-            } else {
-                bwd.set(GRB.DoubleAttr.UB, 0);
-            }
+            objective.addTerm(edgeScore, forward);
+            objective.addTerm(edgeScore, backward);
+            maxCost.addTerm(edgeDist, forward);
+            maxCost.addTerm(edgeDist, backward);
 
             // (1j)
             GRBLinExpr arcConstraint = new GRBLinExpr();
-            arcConstraint.addTerm(1, fwd);
-            arcConstraint.addTerm(1, bwd);
+            arcConstraint.addTerm(1, forward);
+            arcConstraint.addTerm(1, backward);
             model.addConstr(arcConstraint, GRB.LESS_EQUAL, 1, "arc_constraint");
         }
 
         model.setObjective(objective, GRB.MAXIMIZE);
         model.addConstr(maxCost, GRB.LESS_EQUAL, params.getMaxCost(), "max_cost");
 
+        int numNodes = graph.getNodes();
         for(int i = 0; i < numNodes; i++) {
             // (1d)
             GRBLinExpr edgeCounts = new GRBLinExpr();
@@ -102,12 +73,12 @@ public class Main {
             EdgeIterator incoming = graphUtils.incomingEdges(i);
             while(incoming.next()) {
                 incomingIds.add(incoming.getEdge());
-                edgeCounts.addTerm(1, getArc(incoming));
+                edgeCounts.addTerm(1, vars.getArc(incoming));
             }
 
             EdgeIterator outgoing = graphUtils.outgoingEdges(i);
             while(outgoing.next()) {
-                GRBVar arc = getArc(outgoing);
+                GRBVar arc = vars.getArc(outgoing);
                 // Check if we already recorded it as an incoming edge
                 if(incomingIds.contains(outgoing.getEdge())) {
                     edgeCounts.remove(arc);
@@ -122,27 +93,17 @@ public class Main {
             GRBLinExpr vertexVisits = new GRBLinExpr();
             outgoing = graphUtils.outgoingEdges(i);
             while(outgoing.next()) {
-                vertexVisits.addTerm(1, getArc(outgoing));
+                vertexVisits.addTerm(1, vars.getArc(outgoing));
             }
-            vertexVisits.addTerm(-1, verts[i]);
+            vertexVisits.addTerm(-1, vars.getVertex(i));
             model.addConstr(vertexVisits, GRB.EQUAL, 0, "vertex_visits");
         }
 
         // (1h)/(1i)
         // Start vertex can only be visited once
-        GRBVar startNode = verts[START_NODE_ID];
+        GRBVar startNode = vars.getVertex(START_NODE_ID);
         startNode.set(GRB.DoubleAttr.LB, 1);
         startNode.set(GRB.DoubleAttr.UB, 1);
-    }
-
-    private static GRBVar getArc(EdgeIterator edge) {
-        int edgeId = edge.getEdge();
-        int baseNode = edge.getBaseNode();
-        if(baseNode == arcBaseIds[edgeId]) {
-            return arcsFwd[edgeId];
-        } else {
-            return arcsBwd[edgeId];
-        }
     }
 
     private static void runSolver() throws GRBException {
