@@ -13,22 +13,12 @@ import com.graphhopper.storage.index.QueryResult;
 import com.graphhopper.util.EdgeIterator;
 import gurobi.*;
 
-import java.io.FileInputStream;
-import java.io.FileNotFoundException;
-import java.io.IOException;
-import java.io.InputStream;
 import java.util.Arrays;
-import java.util.Properties;
 
 public class Main {
 
-    private static String GRAPH_FILE;
-    private static String GRAPH_FOLDER;
-    private static double MAX_COST;
-    private static double START_LAT;
-    private static double START_LON;
+    private static Params params;
     private static int START_NODE_ID;
-    private static String VEHICLE;
 
     // Graph variables
     private static GraphHopper hopper;
@@ -103,7 +93,7 @@ public class Main {
         }
 
         model.setObjective(objective, GRB.MAXIMIZE);
-        model.addConstr(maxCost, GRB.LESS_EQUAL, MAX_COST, "max_cost");
+        model.addConstr(maxCost, GRB.LESS_EQUAL, params.getMaxCost(), "max_cost");
 
         for(int i = 0; i < numNodes; i++) {
             // (1d)
@@ -156,8 +146,9 @@ public class Main {
     }
 
     private static void runSolver() throws GRBException {
-        System.out.println("Max cost: " + MAX_COST);
-        System.out.println("Start position: " + START_LAT + ", " + START_LON + " (Node " + START_NODE_ID + ")");
+        System.out.println("Max cost: " + params.getMaxCost());
+        System.out.println("Start position: " + params.getStartLat() + ", " + params.getStartLon() +
+                " (Node " + START_NODE_ID + ")");
 
         model.optimize();
 
@@ -169,26 +160,25 @@ public class Main {
     private static void loadOSM() {
         System.out.println("---- Starting GraphHopper ----");
         hopper = new GraphHopperOSM();
-        hopper.setDataReaderFile(GRAPH_FILE);
-        hopper.setGraphHopperLocation(GRAPH_FOLDER);
+        hopper.setDataReaderFile(params.getGraphFile());
+        hopper.setGraphHopperLocation(params.getGraphFolder());
         hopper.forDesktop();
 
-        EncodingManager encodingManager = new EncodingManager(VEHICLE);
+        EncodingManager encodingManager = new EncodingManager(params.getVehicle());
         hopper.setEncodingManager(encodingManager);
         hopper.setCHEnabled(false);
         hopper.importOrLoad();
 
         graph = hopper.getGraphHopperStorage().getBaseGraph();
-        flagEncoder = encodingManager.getEncoder(VEHICLE);
+        flagEncoder = encodingManager.getEncoder(params.getVehicle());
         score = new BikePriorityWeighting(flagEncoder);
         graphUtils = new GraphUtils(graph, flagEncoder);
 
-        QueryResult result = hopper.getLocationIndex().findClosest(START_LAT, START_LON,
+        QueryResult result = hopper.getLocationIndex().findClosest(params.getStartLat(), params.getStartLon(),
                 new DefaultEdgeFilter(flagEncoder));
         if(!result.isValid()) {
             System.out.println("Unable to find starting node near lat/lon points!");
             System.exit(1);
-
         }
 
         START_NODE_ID = result.getClosestNode();
@@ -206,29 +196,9 @@ public class Main {
                 graph.getAllEdges().getMaxId(), graph.getNodes(), nonTraversable, oneWay));
     }
 
-    private static void loadParams() {
-        Properties properties = new Properties();
-        InputStream inputStream = null;
-        try {
-            inputStream = new FileInputStream("src/main/resources/params.properties");
-            properties.load(inputStream);
-        } catch(FileNotFoundException e) {
-            System.out.println("No params file!");
-            e.printStackTrace();
-        } catch(IOException e) {
-            System.out.println("Error reading params!");
-            e.printStackTrace();
-        }
-        GRAPH_FILE = properties.getProperty("graphFile");
-        GRAPH_FOLDER = properties.getProperty("graphFolder");
-        START_LAT = Double.parseDouble(properties.getProperty("startLat"));
-        START_LON = Double.parseDouble(properties.getProperty("startLon"));
-        MAX_COST = Double.parseDouble(properties.getProperty("maxCost"));
-        VEHICLE = properties.getProperty("vehicle");
-    }
-
     public static void main(String[] args) {
-        loadParams();
+        params = new Params();
+        params.loadParams();
 
         // Parse & Load Open Street Map data
         loadOSM();
