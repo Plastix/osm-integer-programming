@@ -27,20 +27,19 @@ public class SubtourConstraint extends GRBCallback {
         try {
             if(where == GRB.CB_MIPSOL) { // Found an integer feasible solution
 
-                IntHashSet vertices = getReachableVertexSubset(START_NODE_ID);
-                int verticesVisited = numVisitedVertices();
+                IntHashSet visitedVertices = getReachableVertexSubset(START_NODE_ID);
+                int numVerticesInSolution = numVerticesInSolution();
 
                 // If the number of vertices we can reach from the start is not the number of vertices we
                 // visit in the entire solution, we have a disconnected tour
-                if(vertices.size() < verticesVisited) {
-                    vertices.remove(START_NODE_ID);
+                if(visitedVertices.size() != numVerticesInSolution) {
 
                     // Add sub-tour elimination constraint
                     GRBLinExpr subtourConstraint = new GRBLinExpr();
                     int sumVertexVisits = 0;
                     int totalOutgoingEdges = 0;
 
-                    for(IntCursor cursor : vertices) {
+                    for(IntCursor cursor : visitedVertices) {
                         int vertexId = cursor.value;
                         EdgeIterator outgoing = graphUtils.outgoingEdges(vertexId);
 
@@ -64,7 +63,7 @@ public class SubtourConstraint extends GRBCallback {
         }
     }
 
-    private int numVisitedVertices() throws GRBException {
+    private int numVerticesInSolution() throws GRBException {
         double[] values = getSolution(vars.getVerts());
 
         int visited = 0;
@@ -73,7 +72,6 @@ public class SubtourConstraint extends GRBCallback {
                 visited++;
             }
         }
-
         return visited;
     }
 

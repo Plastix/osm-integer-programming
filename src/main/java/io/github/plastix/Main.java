@@ -115,6 +115,7 @@ public class Main {
         System.out.println("Start position: " + params.getStartLat() + ", " + params.getStartLon() +
                 " (Node " + START_NODE_ID + ")");
 
+//        model.set(GRB.IntParam.LogToConsole, 0);
         model.optimize();
 
         env.dispose();
