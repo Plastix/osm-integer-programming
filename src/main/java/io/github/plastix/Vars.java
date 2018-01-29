@@ -86,4 +86,7 @@ public class Vars {
         return verts[id];
     }
 
+    public GRBVar[] getVerts() {
+        return verts;
+    }
 }

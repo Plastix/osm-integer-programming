@@ -104,6 +104,10 @@ public class Main {
         GRBVar startNode = vars.getVertex(START_NODE_ID);
         startNode.set(GRB.DoubleAttr.LB, 1);
         startNode.set(GRB.DoubleAttr.UB, 1);
+
+        // Must set LazyConstraints parameter when using lazy constraints
+        model.set(GRB.IntParam.LazyConstraints, 1);
+        model.setCallback(new SubtourConstraint(vars, START_NODE_ID, graphUtils));
     }
 
     private static void runSolver() throws GRBException {

@@ -1,7 +1,9 @@
 package io.github.plastix;
 
+import com.graphhopper.routing.util.DefaultEdgeFilter;
 import com.graphhopper.routing.util.FlagEncoder;
 import com.graphhopper.storage.Graph;
+import com.graphhopper.util.EdgeExplorer;
 import com.graphhopper.util.EdgeIterator;
 
 public class GraphUtils {
@@ -28,6 +30,10 @@ public class GraphUtils {
 
     public boolean isOneWay(EdgeIterator edgeIterator) {
         return edgeIterator.isForward(flagEncoder) != edgeIterator.isBackward(flagEncoder);
+    }
+
+    public EdgeExplorer getEdgeExplorer() {
+        return graph.createEdgeExplorer(new DefaultEdgeFilter(flagEncoder));
     }
 
 }
