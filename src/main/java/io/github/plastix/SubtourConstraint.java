@@ -28,7 +28,13 @@ public class SubtourConstraint extends GRBCallback {
             if(where == GRB.CB_MIPSOL) { // Found an integer feasible solution
 
                 IntHashSet visitedVertices = getReachableVertexSubset(START_NODE_ID);
+                visitedVertices.remove(START_NODE_ID);
                 int numVerticesInSolution = numVerticesInSolution();
+
+                System.out.println("-- Callback --");
+                System.out.println("Solution vertices: " + numVerticesInSolution);
+                System.out.println("Reachable vertices: " + visitedVertices.size());
+                System.out.println("Solution arcs: " + numArcsInSolution());
 
                 // If the number of vertices we can reach from the start is not the number of vertices we
                 // visit in the entire solution, we have a disconnected tour
@@ -52,6 +58,7 @@ public class SubtourConstraint extends GRBCallback {
                     }
 
                     double rhs = ((double) sumVertexVisits) / ((double) totalOutgoingEdges);
+                    System.out.println("adding lazy constraint!");
                     addLazy(subtourConstraint, GRB.GREATER_EQUAL, rhs);
 
                 }
@@ -88,7 +95,7 @@ public class SubtourConstraint extends GRBCallback {
                 EdgeIterator iter = explorer.setBaseNode(current);
                 while(iter.next()) {
                     int connectedId = iter.getAdjNode();
-                    if(getSolution(vars.getArcVar(iter)) > 0) {
+                    if(getSolution(vars.getArcVar(iter)) > 0.5) {
                         stack.addLast(connectedId);
                     }
                 }
@@ -97,5 +104,17 @@ public class SubtourConstraint extends GRBCallback {
         }
 
         return explored;
+    }
+
+    private int numArcsInSolution() throws GRBException {
+        double[] values = getSolution(vars.getArcVars());
+
+        int visited = 0;
+        for(double value : values) {
+            if(value > 0) {
+                visited++;
+            }
+        }
+        return visited;
     }
 }

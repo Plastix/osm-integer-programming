@@ -1,5 +1,10 @@
 package io.github.plastix;
 
+import com.carrotsearch.hppc.IntIntHashMap;
+import com.carrotsearch.hppc.IntIntMap;
+import com.carrotsearch.hppc.IntObjectHashMap;
+import com.carrotsearch.hppc.IntObjectMap;
+import com.carrotsearch.hppc.cursors.IntObjectCursor;
 import com.graphhopper.routing.util.AllEdgesIterator;
 import com.graphhopper.storage.Graph;
 import com.graphhopper.util.EdgeIterator;
@@ -16,29 +21,25 @@ public class Vars {
     private GraphUtils graphUtils;
     private GRBModel model;
 
-    // arcs[arcId][0] = forwardArc
-    // arcs[arcId][1] = backwardArc
-    private GRBVar[][] arcs;
     private GRBVar[] verts;
-    private int[] arcBaseIds;
+    private IntObjectMap<GRBVar> forwardArcs;
+    private IntObjectMap<GRBVar> backwardArcs;
+    private IntIntMap arcBaseIds; // Records original "direction" of arc when processed.
 
     Vars(Graph graph, GRBModel model, GraphUtils graphUtils) throws GRBException {
         this.graph = graph;
         this.model = model;
         this.graphUtils = graphUtils;
+
+        backwardArcs = new IntObjectHashMap<>();
+        forwardArcs = new IntObjectHashMap<>();
+        arcBaseIds = new IntIntHashMap();
         addVarsToModel();
     }
 
     private void addVarsToModel() throws GRBException {
         AllEdgesIterator edges = graph.getAllEdges();
-        int numEdges = edges.getMaxId();
         int numNodes = graph.getNodes();
-        arcBaseIds = new int[numEdges];
-
-        // Make a decision variable for every arc in our graph
-        // arcs[i] = 1 if arc is travelled, 0 otherwise
-        GRBVar[] arcVars = model.addVars(2 * numEdges, GRB.BINARY);
-        arcs = new GRBVar[numEdges][2];
 
         // Make a variable for every node in the graph
         // verts[i] = n the number of times vertex i is visited
@@ -47,17 +48,18 @@ public class Vars {
         verts = model.addVars(null, null, null, types,
                 null, 0, numNodes);
 
-        int i = 0;
         while(edges.next()) {
             int edgeId = edges.getEdge();
             int baseNode = edges.getBaseNode();
-            arcBaseIds[edgeId] = baseNode;
+            arcBaseIds.put(edgeId, baseNode);
 
-            GRBVar forward = arcVars[i++];
-            GRBVar backward = arcVars[i++];
+            // Make a decision variable for every arc in our graph
+            // arcs[i] = 1 if arc is travelled, 0 otherwise
+            GRBVar forward = model.addVar(0, 1, 0, GRB.BINARY, "forward_" + edgeId);
+            GRBVar backward = model.addVar(0, 1, 0, GRB.BINARY, "backward_" + edgeId);
 
-            arcs[edgeId][0] = forward;
-            arcs[edgeId][1] = backward;
+            forwardArcs.put(edgeId, forward);
+            backwardArcs.put(edgeId, backward);
 
             if(!graphUtils.isForward(edges)) {
                 forward.set(GRB.DoubleAttr.UB, 0);
@@ -69,16 +71,20 @@ public class Vars {
         }
     }
 
-    private int getIndex(EdgeIterator edge) {
-        return arcBaseIds[edge.getEdge()] == edge.getBaseNode() ? 0 : 1;
+    private IntObjectMap<GRBVar> getMap(EdgeIterator edge) {
+        return arcBaseIds.get(edge.getEdge()) == edge.getBaseNode() ? forwardArcs : backwardArcs;
+    }
+
+    private IntObjectMap<GRBVar> getComplementMap(EdgeIterator edge) {
+        return arcBaseIds.get(edge.getEdge()) != edge.getBaseNode() ? forwardArcs : backwardArcs;
     }
 
     public GRBVar getArcVar(EdgeIterator edge) {
-        return arcs[edge.getEdge()][getIndex(edge)];
+        return getMap(edge).get(edge.getEdge());
     }
 
     public GRBVar getComplementArcVar(EdgeIterator edge) {
-        return arcs[edge.getEdge()][getIndex(edge) ^ 1];
+        return getComplementMap(edge).get(edge.getEdge());
     }
 
     public GRBVar getVertexVar(int id) {
@@ -87,5 +93,20 @@ public class Vars {
 
     public GRBVar[] getVertexVars() {
         return verts;
+    }
+
+    public GRBVar[] getArcVars() {
+        GRBVar[] result = new GRBVar[forwardArcs.size() * 2];
+
+        int i = 0;
+        for(IntObjectCursor<GRBVar> forwardArc : forwardArcs) {
+            result[i++] = forwardArc.value;
+        }
+
+        for(IntObjectCursor<GRBVar> backwardArc : backwardArcs) {
+            result[i++] = backwardArc.value;
+        }
+
+        return result;
     }
 }
