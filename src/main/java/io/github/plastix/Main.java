@@ -4,12 +4,8 @@ import com.carrotsearch.hppc.IntHashSet;
 import com.graphhopper.GraphHopper;
 import com.graphhopper.reader.osm.GraphHopperOSM;
 import com.graphhopper.routing.util.AllEdgesIterator;
-import com.graphhopper.routing.util.DefaultEdgeFilter;
 import com.graphhopper.routing.util.EncodingManager;
-import com.graphhopper.routing.util.FlagEncoder;
-import com.graphhopper.routing.weighting.Weighting;
 import com.graphhopper.storage.Graph;
-import com.graphhopper.storage.index.QueryResult;
 import com.graphhopper.util.EdgeIterator;
 import gurobi.*;
 
@@ -22,8 +18,6 @@ public class Main {
     private static GraphHopper hopper;
     private static Graph graph;
     private static GraphUtils graphUtils;
-    private static Weighting score;
-    private static FlagEncoder flagEncoder;
 
     // Solver variables
     private static GRBEnv env;
@@ -32,7 +26,7 @@ public class Main {
     private static void setupSolver() throws GRBException {
         env = new GRBEnv("osm.log");
         model = new GRBModel(env);
-        Vars vars = new Vars(graph, model, flagEncoder);
+        Vars vars = new Vars(graph, model, graphUtils);
 
         // (1a)
         // Objective maximizes total collected score of all roads
@@ -44,7 +38,7 @@ public class Main {
 
         AllEdgesIterator edges = graph.getAllEdges();
         while(edges.next()) {
-            double edgeScore = score.calcWeight(edges, false, edges.getEdge());
+            double edgeScore = graphUtils.getArcScore(edges);
             double edgeDist = edges.getDistance();
 
             GRBVar forward = vars.getArc(edges);
@@ -136,18 +130,8 @@ public class Main {
         hopper.importOrLoad();
 
         graph = hopper.getGraphHopperStorage().getBaseGraph();
-        flagEncoder = encodingManager.getEncoder(params.getVehicle());
-        score = new BikePriorityWeighting(flagEncoder);
-        graphUtils = new GraphUtils(graph, flagEncoder);
-
-        QueryResult result = hopper.getLocationIndex().findClosest(params.getStartLat(), params.getStartLon(),
-                new DefaultEdgeFilter(flagEncoder));
-        if(!result.isValid()) {
-            System.out.println("Unable to find starting node near lat/lon points!");
-            System.exit(1);
-        }
-
-        START_NODE_ID = result.getClosestNode();
+        graphUtils = new GraphUtils(graph, hopper.getLocationIndex(), encodingManager, params);
+        START_NODE_ID = graphUtils.getStartNode();
 
         AllEdgesIterator edges = graph.getAllEdges();
         int nonTraversable = 0;

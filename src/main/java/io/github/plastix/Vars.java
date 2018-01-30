@@ -1,7 +1,6 @@
 package io.github.plastix;
 
 import com.graphhopper.routing.util.AllEdgesIterator;
-import com.graphhopper.routing.util.FlagEncoder;
 import com.graphhopper.storage.Graph;
 import com.graphhopper.util.EdgeIterator;
 import gurobi.GRB;
@@ -14,7 +13,7 @@ import java.util.Arrays;
 public class Vars {
 
     private Graph graph;
-    private FlagEncoder flagEncoder;
+    private GraphUtils graphUtils;
     private GRBModel model;
 
     // arcs[arcId][0] = forwardArc
@@ -23,10 +22,10 @@ public class Vars {
     private GRBVar[] verts;
     private int[] arcBaseIds;
 
-    Vars(Graph graph, GRBModel model, FlagEncoder flagEncoder) throws GRBException {
+    Vars(Graph graph, GRBModel model, GraphUtils graphUtils) throws GRBException {
         this.graph = graph;
         this.model = model;
-        this.flagEncoder = flagEncoder;
+        this.graphUtils = graphUtils;
         addVarsToModel();
     }
 
@@ -60,11 +59,11 @@ public class Vars {
             arcs[edgeId][0] = forward;
             arcs[edgeId][1] = backward;
 
-            if(!edges.isForward(flagEncoder)) {
+            if(!graphUtils.isForward(edges)) {
                 forward.set(GRB.DoubleAttr.UB, 0);
             }
 
-            if(!edges.isBackward(flagEncoder)) {
+            if(!graphUtils.isBackward(edges)) {
                 backward.set(GRB.DoubleAttr.UB, 0);
             }
         }
