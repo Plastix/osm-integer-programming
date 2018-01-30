@@ -41,8 +41,8 @@ public class Main {
             double edgeScore = graphUtils.getArcScore(edges);
             double edgeDist = edges.getDistance();
 
-            GRBVar forward = vars.getArc(edges);
-            GRBVar backward = vars.getComplementArc(edges);
+            GRBVar forward = vars.getArcVar(edges);
+            GRBVar backward = vars.getComplementArcVar(edges);
 
             objective.addTerm(edgeScore, forward);
             objective.addTerm(edgeScore, backward);
@@ -67,12 +67,12 @@ public class Main {
             EdgeIterator incoming = graphUtils.incomingEdges(i);
             while(incoming.next()) {
                 incomingIds.add(incoming.getEdge());
-                edgeCounts.addTerm(1, vars.getArc(incoming));
+                edgeCounts.addTerm(1, vars.getArcVar(incoming));
             }
 
             EdgeIterator outgoing = graphUtils.outgoingEdges(i);
             while(outgoing.next()) {
-                GRBVar arc = vars.getArc(outgoing);
+                GRBVar arc = vars.getArcVar(outgoing);
                 // Check if we already recorded it as an incoming edge
                 if(incomingIds.contains(outgoing.getEdge())) {
                     edgeCounts.remove(arc);
@@ -87,15 +87,15 @@ public class Main {
             GRBLinExpr vertexVisits = new GRBLinExpr();
             outgoing = graphUtils.outgoingEdges(i);
             while(outgoing.next()) {
-                vertexVisits.addTerm(1, vars.getArc(outgoing));
+                vertexVisits.addTerm(1, vars.getArcVar(outgoing));
             }
-            vertexVisits.addTerm(-1, vars.getVertex(i));
+            vertexVisits.addTerm(-1, vars.getVertexVar(i));
             model.addConstr(vertexVisits, GRB.EQUAL, 0, "vertex_visits");
         }
 
         // (1h)/(1i)
-        // Start vertex can only be visited once
-        GRBVar startNode = vars.getVertex(START_NODE_ID);
+        // Start vertex must be visited exactly once
+        GRBVar startNode = vars.getVertexVar(START_NODE_ID);
         startNode.set(GRB.DoubleAttr.LB, 1);
         startNode.set(GRB.DoubleAttr.UB, 1);
 

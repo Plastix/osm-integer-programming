@@ -44,11 +44,11 @@ public class SubtourConstraint extends GRBCallback {
                         EdgeIterator outgoing = graphUtils.outgoingEdges(vertexId);
 
                         while(outgoing.next()) {
-                            subtourConstraint.addTerm(1, vars.getArc(outgoing));
+                            subtourConstraint.addTerm(1, vars.getArcVar(outgoing));
                             totalOutgoingEdges += 1;
                         }
 
-                        sumVertexVisits += getSolution(vars.getVertex(vertexId));
+                        sumVertexVisits += getSolution(vars.getVertexVar(vertexId));
                     }
 
                     double rhs = ((double) sumVertexVisits) / ((double) totalOutgoingEdges);
@@ -64,7 +64,7 @@ public class SubtourConstraint extends GRBCallback {
     }
 
     private int numVerticesInSolution() throws GRBException {
-        double[] values = getSolution(vars.getVerts());
+        double[] values = getSolution(vars.getVertexVars());
 
         int visited = 0;
         for(double value : values) {
@@ -88,7 +88,7 @@ public class SubtourConstraint extends GRBCallback {
                 EdgeIterator iter = explorer.setBaseNode(current);
                 while(iter.next()) {
                     int connectedId = iter.getAdjNode();
-                    if(getSolution(vars.getArc(iter)) > 0) {
+                    if(getSolution(vars.getArcVar(iter)) > 0) {
                         stack.addLast(connectedId);
                     }
                 }

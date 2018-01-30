@@ -73,19 +73,19 @@ public class Vars {
         return arcBaseIds[edge.getEdge()] == edge.getBaseNode() ? 0 : 1;
     }
 
-    public GRBVar getArc(EdgeIterator edge) {
+    public GRBVar getArcVar(EdgeIterator edge) {
         return arcs[edge.getEdge()][getIndex(edge)];
     }
 
-    public GRBVar getComplementArc(EdgeIterator edge) {
+    public GRBVar getComplementArcVar(EdgeIterator edge) {
         return arcs[edge.getEdge()][getIndex(edge) ^ 1];
     }
 
-    public GRBVar getVertex(int id) {
+    public GRBVar getVertexVar(int id) {
         return verts[id];
     }
 
-    public GRBVar[] getVerts() {
+    public GRBVar[] getVertexVars() {
         return verts;
     }
 }
