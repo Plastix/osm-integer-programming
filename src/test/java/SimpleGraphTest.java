@@ -71,7 +71,7 @@ public class SimpleGraphTest {
     }
 
     @Test
-    public void singleThreeCycle() throws GRBException {
+    public void singleDirectedThreeCycle() throws GRBException {
         addEdge(0, 1, false, 1, 1);
         addEdge(1, 2, false, 1, 1);
         addEdge(2, 0, false, 1, 1);
@@ -87,16 +87,35 @@ public class SimpleGraphTest {
         assertEquals(3, score, FP_PRECISION);
     }
 
-    @Ignore
     @Test
-    public void singleThreeCycle_limitedBudget() throws GRBException {
+    public void singleUndirectedThreeCycle() throws GRBException {
         addEdge(0, 1, true, 1, 1);
         addEdge(1, 2, true, 1, 1);
         addEdge(2, 0, true, 1, 1);
 
         vars.addVarsToModel();
+        constraints.setupConstraints(0, 3);
+        model.optimize();
+
+        assertHasSolution();
+        printSolution();
+
+        double score = model.get(GRB.DoubleAttr.ObjVal);
+        assertEquals(3, score, FP_PRECISION);
+    }
+
+    @Ignore
+    @Test
+    public void singleThreeCycle_limitedBudget() throws GRBException {
+        addEdge(0, 1, false, 1, 1);
+        addEdge(1, 2, false, 1, 1);
+        addEdge(2, 0, false, 1, 1);
+
+        vars.addVarsToModel();
         constraints.setupConstraints(0, 2);
         model.optimize();
+
+        assertHasSolution();
 
         double score = model.get(GRB.DoubleAttr.ObjVal);
         assertEquals(2, score, FP_PRECISION);

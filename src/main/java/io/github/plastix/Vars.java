@@ -68,25 +68,22 @@ public class Vars {
                 backward.set(GRB.DoubleAttr.UB, 0);
             }
 
-            System.out.println(edgeId + ": " + baseNode + "->" + edges.getAdjNode() + " " +
+            System.out.println(edgeId + ": " + baseNode + " -> " + edges.getAdjNode() + " " +
                     graphUtils.isForward(edges) + " " + graphUtils.isBackward(edges));
         }
     }
 
-    private IntObjectMap<GRBVar> getMap(EdgeIterator edge) {
-        return arcBaseIds.get(edge.getEdge()) == edge.getBaseNode() ? forwardArcs : backwardArcs;
+    private IntObjectMap<GRBVar> getMap(EdgeIterator edge, boolean reverse) {
+        int baseNode = edge.getBaseNode();
+        if(reverse) {
+            baseNode = edge.getAdjNode();
+        }
+        return arcBaseIds.get(edge.getEdge()) == baseNode ? forwardArcs : backwardArcs;
     }
 
-    private IntObjectMap<GRBVar> getComplementMap(EdgeIterator edge) {
-        return arcBaseIds.get(edge.getEdge()) != edge.getBaseNode() ? forwardArcs : backwardArcs;
-    }
 
-    public GRBVar getArcVar(EdgeIterator edge) {
-        return getMap(edge).get(edge.getEdge());
-    }
-
-    public GRBVar getComplementArcVar(EdgeIterator edge) {
-        return getComplementMap(edge).get(edge.getEdge());
+    public GRBVar getArcVar(EdgeIterator edge, boolean reverse) {
+        return getMap(edge, reverse).get(edge.getEdge());
     }
 
     public GRBVar getVertexVar(int id) {

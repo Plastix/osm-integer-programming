@@ -35,8 +35,8 @@ public class Constraints {
             double edgeScore = graphUtils.getArcScore(edges);
             double edgeDist = edges.getDistance();
 
-            GRBVar forward = vars.getArcVar(edges);
-            GRBVar backward = vars.getComplementArcVar(edges);
+            GRBVar forward = vars.getArcVar(edges, false);
+            GRBVar backward = vars.getArcVar(edges, true);
 
             objective.addTerm(edgeScore, forward);
             objective.addTerm(edgeScore, backward);
@@ -61,18 +61,24 @@ public class Constraints {
             EdgeIterator incoming = graphUtils.incomingEdges(i);
             while(incoming.next()) {
                 incomingIds.add(incoming.getEdge());
-                edgeCounts.addTerm(1, vars.getArcVar(incoming));
+                edgeCounts.addTerm(1, vars.getArcVar(incoming, true));
+
+                System.out.println("Incoming: " + i);
+                System.out.println("(Edge: " + incoming.getEdge() + ") " + incoming.getBaseNode() + " <- " + incoming.getAdjNode());
             }
 
             EdgeIterator outgoing = graphUtils.outgoingEdges(i);
             while(outgoing.next()) {
-                GRBVar arc = vars.getArcVar(outgoing);
+                GRBVar arc = vars.getArcVar(outgoing, false);
                 // Check if we already recorded it as an incoming edge
                 if(incomingIds.contains(outgoing.getEdge())) {
                     edgeCounts.remove(arc);
                 } else {
                     edgeCounts.addTerm(-1, arc);
                 }
+
+                System.out.println("Outgoing: " + i);
+                System.out.println("(Edge: " + outgoing.getEdge() + ") " + outgoing.getBaseNode() + " -> " + outgoing.getAdjNode());
             }
 
             model.addConstr(edgeCounts, GRB.EQUAL, 0, "edge_counts");
@@ -81,7 +87,7 @@ public class Constraints {
             GRBLinExpr vertexVisits = new GRBLinExpr();
             outgoing = graphUtils.outgoingEdges(i);
             while(outgoing.next()) {
-                vertexVisits.addTerm(1, vars.getArcVar(outgoing));
+                vertexVisits.addTerm(1, vars.getArcVar(outgoing, false));
             }
             vertexVisits.addTerm(-1, vars.getVertexVar(i));
             model.addConstr(vertexVisits, GRB.EQUAL, 0, "vertex_visits");
