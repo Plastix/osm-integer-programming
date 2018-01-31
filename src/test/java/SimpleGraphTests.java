@@ -17,7 +17,6 @@ import io.github.plastix.GraphUtils;
 import io.github.plastix.Vars;
 import org.junit.After;
 import org.junit.Before;
-import org.junit.Ignore;
 import org.junit.Test;
 
 import java.util.Arrays;
@@ -26,7 +25,7 @@ import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.fail;
 
 @SuppressWarnings("WeakerAccess")
-public class SimpleGraphTest {
+public class SimpleGraphTests {
 
     static final double FP_PRECISION = 0.01;
 
@@ -70,21 +69,21 @@ public class SimpleGraphTest {
         weights.put(edge.getEdge(), score);
     }
 
+    private void runSolver(int startNode, int maxCost) throws GRBException {
+        vars.addVarsToModel();
+        constraints.setupConstraints(startNode, maxCost);
+        model.optimize();
+    }
+
     @Test
     public void singleDirectedThreeCycle() throws GRBException {
         addEdge(0, 1, false, 1, 1);
         addEdge(1, 2, false, 1, 1);
         addEdge(2, 0, false, 1, 1);
 
-        vars.addVarsToModel();
-        constraints.setupConstraints(0, 3);
-        model.optimize();
-
+        runSolver(0, 3);
         assertHasSolution();
-        printSolution();
-
-        double score = model.get(GRB.DoubleAttr.ObjVal);
-        assertEquals(3, score, FP_PRECISION);
+        assertSolution(3);
     }
 
     @Test
@@ -93,36 +92,23 @@ public class SimpleGraphTest {
         addEdge(1, 2, true, 1, 1);
         addEdge(2, 0, true, 1, 1);
 
-        vars.addVarsToModel();
-        constraints.setupConstraints(0, 3);
-        model.optimize();
-
+        runSolver(0, 3);
         assertHasSolution();
-        printSolution();
-
-        double score = model.get(GRB.DoubleAttr.ObjVal);
-        assertEquals(3, score, FP_PRECISION);
+        assertSolution(3);
     }
 
-    @Ignore
     @Test
-    public void singleThreeCycle_limitedBudget() throws GRBException {
-        addEdge(0, 1, false, 1, 1);
-        addEdge(1, 2, false, 1, 1);
-        addEdge(2, 0, false, 1, 1);
+    public void singleUndirectedThreeCycle_limitedBudget() throws GRBException {
+        addEdge(0, 1, true, 1, 1);
+        addEdge(1, 2, true, 1, 1);
+        addEdge(2, 0, true, 1, 1);
 
-        vars.addVarsToModel();
-        constraints.setupConstraints(0, 2);
-        model.optimize();
-
-        assertHasSolution();
-
-        double score = model.get(GRB.DoubleAttr.ObjVal);
-        assertEquals(2, score, FP_PRECISION);
+        runSolver(0, 2);
+        // We can't find a solution here since we aren't allowed to take a road backwards
+        assertNoSolution();
     }
 
 
-    @Ignore
     @Test
     public void twoDisconnectedThreeCycles() throws GRBException {
         addEdge(0, 1, true, 1, 1);
@@ -133,13 +119,9 @@ public class SimpleGraphTest {
         addEdge(4, 5, true, 1, 1);
         addEdge(5, 3, true, 1, 1);
 
-        vars.addVarsToModel();
-        constraints.setupConstraints(0, 4);
-        model.optimize();
-
-        double score = model.get(GRB.DoubleAttr.ObjVal);
-
-        assertEquals(3, score, FP_PRECISION);
+        runSolver(0, 3);
+        assertHasSolution();
+        assertSolution(3);
     }
 
     private void printSolution() throws GRBException {
@@ -166,6 +148,17 @@ public class SimpleGraphTest {
         if(model.get(GRB.IntAttr.Status) != GRB.Status.OPTIMAL) {
             fail("Gurobi could not find an optimal solution!");
         }
+    }
+
+    private void assertNoSolution() throws GRBException {
+        if(model.get(GRB.IntAttr.Status) != GRB.Status.INFEASIBLE) {
+            fail("Gurobi found an optimal solution!");
+        }
+    }
+
+    private void assertSolution(double score) throws GRBException {
+        double actualScore = model.get(GRB.DoubleAttr.ObjVal);
+        assertEquals(actualScore, score, FP_PRECISION);
     }
 
     private static class TestWeighting implements Weighting {

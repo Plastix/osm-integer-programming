@@ -57,28 +57,20 @@ public class Constraints {
         for(int i = 0; i < numNodes; i++) {
             // (1d)
             GRBLinExpr edgeCounts = new GRBLinExpr();
-            IntHashSet incomingIds = new IntHashSet();
             EdgeIterator incoming = graphUtils.incomingEdges(i);
+//            System.out.println("Incoming: " + i);
             while(incoming.next()) {
-                incomingIds.add(incoming.getEdge());
                 edgeCounts.addTerm(1, vars.getArcVar(incoming, true));
-
-                System.out.println("Incoming: " + i);
-                System.out.println("(Edge: " + incoming.getEdge() + ") " + incoming.getBaseNode() + " <- " + incoming.getAdjNode());
+//                System.out.println("(Edge: " + incoming.getEdge() + ") " + incoming.getBaseNode() + " <- " + incoming.getAdjNode());
             }
 
             EdgeIterator outgoing = graphUtils.outgoingEdges(i);
+//            System.out.println("Outgoing: " + i);
             while(outgoing.next()) {
                 GRBVar arc = vars.getArcVar(outgoing, false);
-                // Check if we already recorded it as an incoming edge
-                if(incomingIds.contains(outgoing.getEdge())) {
-                    edgeCounts.remove(arc);
-                } else {
-                    edgeCounts.addTerm(-1, arc);
-                }
+                edgeCounts.addTerm(-1, arc);
 
-                System.out.println("Outgoing: " + i);
-                System.out.println("(Edge: " + outgoing.getEdge() + ") " + outgoing.getBaseNode() + " -> " + outgoing.getAdjNode());
+//                System.out.println("(Edge: " + outgoing.getEdge() + ") " + outgoing.getBaseNode() + " -> " + outgoing.getAdjNode());
             }
 
             model.addConstr(edgeCounts, GRB.EQUAL, 0, "edge_counts");
