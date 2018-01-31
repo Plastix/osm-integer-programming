@@ -124,6 +124,20 @@ public class SimpleGraphTests {
         assertSolution(3);
     }
 
+    @Test
+    public void directedKFour() throws GRBException {
+        addEdge(0, 1, false, 1, 2);
+        addEdge(1, 2, false, 1, 2);
+        addEdge(2, 3, false, 1, 2);
+        addEdge(3, 0, false, 1, 2);
+        addEdge(0, 2, false, 1, 1);
+        addEdge(1, 3, false, 1, 1);
+
+        runSolver(0, 4);
+        assertHasSolution();
+        assertSolution(8);
+    }
+
     private void printSolution() throws GRBException {
         System.out.println("---- Final Solution ----");
         double[] arcs = model.get(GRB.DoubleAttr.X, vars.getArcVars());
