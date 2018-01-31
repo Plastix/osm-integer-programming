@@ -31,8 +31,10 @@ public class Main {
     private static void setupSolver() throws GRBException {
         env = new GRBEnv("osm.log");
         model = new GRBModel(env);
-        Constraints constraints = new Constraints(graph, model, graphUtils, START_NODE_ID, params.getMaxCost());
-        constraints.setupConstraints();
+        Vars vars = new Vars(graph, model, graphUtils);
+        vars.addVarsToModel();
+        Constraints constraints = new Constraints(graph, model, vars, graphUtils);
+        constraints.setupConstraints(START_NODE_ID, params.getMaxCost());
     }
 
     private static void runSolver() throws GRBException {

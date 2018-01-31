@@ -8,23 +8,19 @@ import gurobi.*;
 
 public class Constraints {
 
-    private final double MAX_COST;
     private Graph graph;
     private GRBModel model;
+    private Vars vars;
     private GraphUtils graphUtils;
-    private int START_NODE_ID;
 
-    public Constraints(Graph graph, GRBModel model, GraphUtils graphUtils, int START_NODE_ID, double maxCost) {
+    public Constraints(Graph graph, GRBModel model, Vars vars, GraphUtils graphUtils) {
         this.graph = graph;
         this.model = model;
+        this.vars = vars;
         this.graphUtils = graphUtils;
-        this.START_NODE_ID = START_NODE_ID;
-        this.MAX_COST = maxCost;
     }
 
-    public void setupConstraints() throws GRBException {
-        Vars vars = new Vars(graph, model, graphUtils);
-        vars.addVarsToModel();
+    public void setupConstraints(int startNodeId, double maxCostMeters) throws GRBException {
 
         // (1a)
         // Objective maximizes total collected score of all roads
@@ -32,7 +28,7 @@ public class Constraints {
 
         // (1b)
         // Limit length of path
-        GRBLinExpr maxCost = new GRBLinExpr();
+        GRBLinExpr maxCostConstraint = new GRBLinExpr();
 
         AllEdgesIterator edges = graph.getAllEdges();
         while(edges.next()) {
@@ -44,8 +40,8 @@ public class Constraints {
 
             objective.addTerm(edgeScore, forward);
             objective.addTerm(edgeScore, backward);
-            maxCost.addTerm(edgeDist, forward);
-            maxCost.addTerm(edgeDist, backward);
+            maxCostConstraint.addTerm(edgeDist, forward);
+            maxCostConstraint.addTerm(edgeDist, backward);
 
             // (1j)
             GRBLinExpr arcConstraint = new GRBLinExpr();
@@ -55,7 +51,7 @@ public class Constraints {
         }
 
         model.setObjective(objective, GRB.MAXIMIZE);
-        model.addConstr(maxCost, GRB.LESS_EQUAL, MAX_COST, "max_cost");
+        model.addConstr(maxCostConstraint, GRB.LESS_EQUAL, maxCostMeters, "max_cost");
 
         int numNodes = graph.getNodes();
         for(int i = 0; i < numNodes; i++) {
@@ -93,12 +89,12 @@ public class Constraints {
 
         // (1h)/(1i)
         // Start vertex must be visited exactly once
-        GRBVar startNode = vars.getVertexVar(START_NODE_ID);
-        startNode.set(GRB.DoubleAttr.LB, 1);
-        startNode.set(GRB.DoubleAttr.UB, 1);
+        GRBVar startNodeVar = vars.getVertexVar(startNodeId);
+        startNodeVar.set(GRB.DoubleAttr.LB, 1);
+        startNodeVar.set(GRB.DoubleAttr.UB, 1);
 
         // Must set LazyConstraints parameter when using lazy constraints
         model.set(GRB.IntParam.LazyConstraints, 1);
-        model.setCallback(new SubtourConstraint(vars, START_NODE_ID, graphUtils));
+        model.setCallback(new SubtourConstraint(vars, startNodeId, graphUtils));
     }
 }

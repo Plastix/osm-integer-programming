@@ -4,7 +4,6 @@ import com.carrotsearch.hppc.IntIntHashMap;
 import com.carrotsearch.hppc.IntIntMap;
 import com.carrotsearch.hppc.IntObjectHashMap;
 import com.carrotsearch.hppc.IntObjectMap;
-import com.carrotsearch.hppc.cursors.IntObjectCursor;
 import com.graphhopper.routing.util.AllEdgesIterator;
 import com.graphhopper.storage.Graph;
 import com.graphhopper.util.EdgeIterator;
@@ -13,6 +12,7 @@ import gurobi.GRBException;
 import gurobi.GRBModel;
 import gurobi.GRBVar;
 
+import java.util.ArrayList;
 import java.util.Arrays;
 
 public class Vars {
@@ -26,7 +26,7 @@ public class Vars {
     private IntObjectMap<GRBVar> backwardArcs;
     private IntIntMap arcBaseIds; // Records original "direction" of arc when processed.
 
-    Vars(Graph graph, GRBModel model, GraphUtils graphUtils) {
+    public Vars(Graph graph, GRBModel model, GraphUtils graphUtils) {
         this.graph = graph;
         this.model = model;
         this.graphUtils = graphUtils;
@@ -67,6 +67,9 @@ public class Vars {
             if(!graphUtils.isBackward(edges)) {
                 backward.set(GRB.DoubleAttr.UB, 0);
             }
+
+            System.out.println(edgeId + ": " + baseNode + "->" + edges.getAdjNode() + " " +
+                    graphUtils.isForward(edges) + " " + graphUtils.isBackward(edges));
         }
     }
 
@@ -95,17 +98,13 @@ public class Vars {
     }
 
     public GRBVar[] getArcVars() {
-        GRBVar[] result = new GRBVar[forwardArcs.size() * 2];
+        ArrayList<GRBVar> result = new ArrayList<>();
 
-        int i = 0;
-        for(IntObjectCursor<GRBVar> forwardArc : forwardArcs) {
-            result[i++] = forwardArc.value;
+        for(int i = 0; i < forwardArcs.size(); i++) {
+            result.add(forwardArcs.get(i));
+            result.add(backwardArcs.get(i));
         }
 
-        for(IntObjectCursor<GRBVar> backwardArc : backwardArcs) {
-            result[i++] = backwardArc.value;
-        }
-
-        return result;
+        return result.toArray(new GRBVar[0]);
     }
 }
