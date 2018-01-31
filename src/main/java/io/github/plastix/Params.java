@@ -19,7 +19,8 @@ public class Params {
         Properties properties = new Properties();
         InputStream inputStream;
         try {
-            inputStream = new FileInputStream("src/main/resources/params.properties");
+            String paramPath = getClass().getResource("/params.properties").getPath();
+            inputStream = new FileInputStream(paramPath);
             properties.load(inputStream);
         } catch(FileNotFoundException e) {
             System.out.println("No params file!");
