@@ -5,10 +5,7 @@ import com.carrotsearch.hppc.IntHashSet;
 import com.carrotsearch.hppc.cursors.IntCursor;
 import com.graphhopper.util.EdgeExplorer;
 import com.graphhopper.util.EdgeIterator;
-import gurobi.GRB;
-import gurobi.GRBCallback;
-import gurobi.GRBException;
-import gurobi.GRBLinExpr;
+import gurobi.*;
 
 public class SubtourConstraint extends GRBCallback {
 
@@ -45,21 +42,26 @@ public class SubtourConstraint extends GRBCallback {
                     int sumVertexVisits = 0;
                     int totalOutgoingEdges = 0;
 
+                    double lhs = 0;
                     for(IntCursor cursor : visitedVertices) {
                         int vertexId = cursor.value;
                         EdgeIterator outgoing = graphUtils.outgoingEdges(vertexId);
 
                         while(outgoing.next()) {
-                            subtourConstraint.addTerm(1, vars.getArcVar(outgoing, false));
+                            GRBVar var = vars.getArcVar(outgoing, false);
+                            subtourConstraint.addTerm(1, var);
                             totalOutgoingEdges += 1;
+
+                            lhs += getSolution(var);
                         }
+
 
                         sumVertexVisits += getSolution(vars.getVertexVar(vertexId));
                     }
 
                     double rhs = ((double) sumVertexVisits) / ((double) totalOutgoingEdges);
-                    System.out.println("adding lazy constraint!");
-                    addLazy(subtourConstraint, GRB.GREATER_EQUAL, rhs);
+                    System.out.println("adding lazy constraint! " + lhs + " <= " + rhs);
+                    addLazy(subtourConstraint, GRB.LESS_EQUAL, rhs);
 
                 }
             }
@@ -80,6 +82,20 @@ public class SubtourConstraint extends GRBCallback {
             }
         }
         return visited;
+    }
+
+    private IntHashSet verticesInSolution() throws GRBException {
+        double[] values = getSolution(vars.getVertexVars());
+
+        IntHashSet result = new IntHashSet();
+
+        for(int i = 0; i < values.length; i++) {
+            if(values[i] > 0) {
+                result.add(i);
+            }
+        }
+
+        return result;
     }
 
     private IntHashSet getReachableVertexSubset(int startNode) throws GRBException {

@@ -125,6 +125,21 @@ public class SimpleGraphTests {
     }
 
     @Test
+    public void twoDisconnectedThreeCycles_largeBudget() throws GRBException {
+        addEdge(0, 1, false, 1, 1);
+        addEdge(1, 2, false, 1, 1);
+        addEdge(2, 0, false, 1, 1);
+
+        addEdge(3, 4, false, 1, 1);
+        addEdge(4, 5, false, 1, 1);
+        addEdge(5, 3, false, 1, 1);
+
+        runSolver(0, 6);
+        assertHasSolution();
+        assertSolution(3);
+    }
+
+    @Test
     public void directedKFour() throws GRBException {
         addEdge(0, 1, false, 1, 2);
         addEdge(1, 2, false, 1, 2);
@@ -172,7 +187,7 @@ public class SimpleGraphTests {
 
     private void assertSolution(double score) throws GRBException {
         double actualScore = model.get(GRB.DoubleAttr.ObjVal);
-        assertEquals(actualScore, score, FP_PRECISION);
+        assertEquals(score, actualScore, FP_PRECISION);
     }
 
     private static class TestWeighting implements Weighting {
