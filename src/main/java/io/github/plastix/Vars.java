@@ -26,7 +26,7 @@ public class Vars {
     private IntObjectMap<GRBVar> backwardArcs;
     private IntIntMap arcBaseIds; // Records original "direction" of arc when processed.
 
-    Vars(Graph graph, GRBModel model, GraphUtils graphUtils) throws GRBException {
+    Vars(Graph graph, GRBModel model, GraphUtils graphUtils) {
         this.graph = graph;
         this.model = model;
         this.graphUtils = graphUtils;
@@ -34,10 +34,9 @@ public class Vars {
         backwardArcs = new IntObjectHashMap<>();
         forwardArcs = new IntObjectHashMap<>();
         arcBaseIds = new IntIntHashMap();
-        addVarsToModel();
     }
 
-    private void addVarsToModel() throws GRBException {
+    public void addVarsToModel() throws GRBException {
         AllEdgesIterator edges = graph.getAllEdges();
         int numNodes = graph.getNodes();
 

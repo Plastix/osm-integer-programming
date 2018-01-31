@@ -1,13 +1,18 @@
 package io.github.plastix;
 
-import com.carrotsearch.hppc.IntHashSet;
 import com.graphhopper.GraphHopper;
 import com.graphhopper.reader.osm.GraphHopperOSM;
 import com.graphhopper.routing.util.AllEdgesIterator;
+import com.graphhopper.routing.util.DefaultEdgeFilter;
 import com.graphhopper.routing.util.EncodingManager;
+import com.graphhopper.routing.util.FlagEncoder;
+import com.graphhopper.routing.weighting.Weighting;
 import com.graphhopper.storage.Graph;
-import com.graphhopper.util.EdgeIterator;
-import gurobi.*;
+import com.graphhopper.storage.index.QueryResult;
+import gurobi.GRB;
+import gurobi.GRBEnv;
+import gurobi.GRBException;
+import gurobi.GRBModel;
 
 public class Main {
 
@@ -26,82 +31,8 @@ public class Main {
     private static void setupSolver() throws GRBException {
         env = new GRBEnv("osm.log");
         model = new GRBModel(env);
-        Vars vars = new Vars(graph, model, graphUtils);
-
-        // (1a)
-        // Objective maximizes total collected score of all roads
-        GRBLinExpr objective = new GRBLinExpr();
-
-        // (1b)
-        // Limit length of path
-        GRBLinExpr maxCost = new GRBLinExpr();
-
-        AllEdgesIterator edges = graph.getAllEdges();
-        while(edges.next()) {
-            double edgeScore = graphUtils.getArcScore(edges);
-            double edgeDist = edges.getDistance();
-
-            GRBVar forward = vars.getArcVar(edges);
-            GRBVar backward = vars.getComplementArcVar(edges);
-
-            objective.addTerm(edgeScore, forward);
-            objective.addTerm(edgeScore, backward);
-            maxCost.addTerm(edgeDist, forward);
-            maxCost.addTerm(edgeDist, backward);
-
-            // (1j)
-            GRBLinExpr arcConstraint = new GRBLinExpr();
-            arcConstraint.addTerm(1, forward);
-            arcConstraint.addTerm(1, backward);
-            model.addConstr(arcConstraint, GRB.LESS_EQUAL, 1, "arc_constraint");
-        }
-
-        model.setObjective(objective, GRB.MAXIMIZE);
-        model.addConstr(maxCost, GRB.LESS_EQUAL, params.getMaxCost(), "max_cost");
-
-        int numNodes = graph.getNodes();
-        for(int i = 0; i < numNodes; i++) {
-            // (1d)
-            GRBLinExpr edgeCounts = new GRBLinExpr();
-            IntHashSet incomingIds = new IntHashSet();
-            EdgeIterator incoming = graphUtils.incomingEdges(i);
-            while(incoming.next()) {
-                incomingIds.add(incoming.getEdge());
-                edgeCounts.addTerm(1, vars.getArcVar(incoming));
-            }
-
-            EdgeIterator outgoing = graphUtils.outgoingEdges(i);
-            while(outgoing.next()) {
-                GRBVar arc = vars.getArcVar(outgoing);
-                // Check if we already recorded it as an incoming edge
-                if(incomingIds.contains(outgoing.getEdge())) {
-                    edgeCounts.remove(arc);
-                } else {
-                    edgeCounts.addTerm(-1, arc);
-                }
-            }
-
-            model.addConstr(edgeCounts, GRB.EQUAL, 0, "edge_counts");
-
-            // (1e)
-            GRBLinExpr vertexVisits = new GRBLinExpr();
-            outgoing = graphUtils.outgoingEdges(i);
-            while(outgoing.next()) {
-                vertexVisits.addTerm(1, vars.getArcVar(outgoing));
-            }
-            vertexVisits.addTerm(-1, vars.getVertexVar(i));
-            model.addConstr(vertexVisits, GRB.EQUAL, 0, "vertex_visits");
-        }
-
-        // (1h)/(1i)
-        // Start vertex must be visited exactly once
-        GRBVar startNode = vars.getVertexVar(START_NODE_ID);
-        startNode.set(GRB.DoubleAttr.LB, 1);
-        startNode.set(GRB.DoubleAttr.UB, 1);
-
-        // Must set LazyConstraints parameter when using lazy constraints
-        model.set(GRB.IntParam.LazyConstraints, 1);
-        model.setCallback(new SubtourConstraint(vars, START_NODE_ID, graphUtils));
+        Constraints constraints = new Constraints(graph, model, graphUtils, START_NODE_ID, params.getMaxCost());
+        constraints.setupConstraints();
     }
 
     private static void runSolver() throws GRBException {
@@ -129,9 +60,11 @@ public class Main {
         hopper.setCHEnabled(false);
         hopper.importOrLoad();
 
+        FlagEncoder flagEncoder = encodingManager.getEncoder(params.getVehicle());
+        Weighting weighting = new BikePriorityWeighting(flagEncoder);
         graph = hopper.getGraphHopperStorage().getBaseGraph();
-        graphUtils = new GraphUtils(graph, hopper.getLocationIndex(), encodingManager, params);
-        START_NODE_ID = graphUtils.getStartNode();
+        graphUtils = new GraphUtils(graph, flagEncoder, weighting);
+        START_NODE_ID = getStartNode(flagEncoder);
 
         AllEdgesIterator edges = graph.getAllEdges();
         int nonTraversable = 0;
@@ -144,6 +77,15 @@ public class Main {
         System.out.println("\n---- OSM Graph Loaded ----");
         System.out.println(String.format("Edges: %d\nNodes: %d\nNon-traversable edges: %d\nOne-way edges: %d\n",
                 graph.getAllEdges().getMaxId(), graph.getNodes(), nonTraversable, oneWay));
+    }
+
+    private static int getStartNode(FlagEncoder flagEncoder) {
+        QueryResult result = hopper.getLocationIndex().findClosest(params.getStartLat(), params.getStartLon(),
+                new DefaultEdgeFilter(flagEncoder));
+        if(!result.isValid()) {
+            throw new RuntimeException("Unable to find node at start lat/lon!");
+        }
+        return result.getClosestNode();
     }
 
     public static void main(String[] args) {
