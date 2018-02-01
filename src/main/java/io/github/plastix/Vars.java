@@ -90,15 +90,4 @@ public class Vars {
     public GRBVar[] getVertexVars() {
         return verts;
     }
-
-    public GRBVar[] getArcVars() {
-        ArrayList<GRBVar> result = new ArrayList<>();
-
-        for(int i = 0; i < forwardArcs.size(); i++) {
-            result.add(forwardArcs.get(i));
-            result.add(backwardArcs.get(i));
-        }
-
-        return result.toArray(new GRBVar[0]);
-    }
 }

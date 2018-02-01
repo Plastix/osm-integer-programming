@@ -44,8 +44,8 @@ public class Main {
 //        model.set(GRB.IntParam.LogToConsole, 0);
         model.optimize();
 
-        env.dispose();
         model.dispose();
+        env.dispose();
         hopper.close();
     }
 
@@ -63,7 +63,7 @@ public class Main {
 
         FlagEncoder flagEncoder = encodingManager.getEncoder(params.getVehicle());
         Weighting weighting = new BikePriorityWeighting(flagEncoder);
-        graph = hopper.getGraphHopperStorage().getBaseGraph();
+        graph = hopper.getGraphHopperStorage();
         graphUtils = new GraphUtils(graph, flagEncoder, weighting);
         START_NODE_ID = getStartNode(flagEncoder);
 

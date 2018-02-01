@@ -1,9 +1,6 @@
 import com.carrotsearch.hppc.IntDoubleHashMap;
 import com.carrotsearch.hppc.IntDoubleMap;
-import com.graphhopper.routing.util.EncodingManager;
-import com.graphhopper.routing.util.FlagEncoder;
-import com.graphhopper.routing.util.HintsMap;
-import com.graphhopper.routing.util.RacingBikeFlagEncoder;
+import com.graphhopper.routing.util.*;
 import com.graphhopper.routing.weighting.Weighting;
 import com.graphhopper.storage.GraphBuilder;
 import com.graphhopper.storage.GraphHopperStorage;
@@ -12,14 +9,13 @@ import gurobi.GRB;
 import gurobi.GRBEnv;
 import gurobi.GRBException;
 import gurobi.GRBModel;
+import io.github.plastix.BikePriorityWeighting;
 import io.github.plastix.Constraints;
 import io.github.plastix.GraphUtils;
 import io.github.plastix.Vars;
 import org.junit.After;
 import org.junit.Before;
 import org.junit.Test;
-
-import java.util.Arrays;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.fail;
@@ -76,6 +72,23 @@ public class SimpleGraphTests {
     }
 
     @Test
+    public void singleArcGraph() throws GRBException {
+        addEdge(0, 1, false, 1, 1);
+
+        runSolver(0, 2);
+        assertNoSolution();
+    }
+
+    @Test
+    public void disconnectedArcs() throws GRBException {
+        addEdge(0, 1, false, 1, 1);
+        addEdge(2, 3, false, 1, 1);
+
+        runSolver(0, 2);
+        assertNoSolution();
+    }
+
+    @Test
     public void singleDirectedThreeCycle() throws GRBException {
         addEdge(0, 1, false, 1, 1);
         addEdge(1, 2, false, 1, 1);
@@ -125,16 +138,18 @@ public class SimpleGraphTests {
     }
 
     @Test
-    public void twoDisconnectedThreeCycles_largeBudget() throws GRBException {
-        addEdge(0, 1, false, 1, 1);
-        addEdge(1, 2, false, 1, 1);
-        addEdge(2, 0, false, 1, 1);
+    public void multipleDisconnectedThreeCycles() throws GRBException {
+        int numThreeCycles = 10;
+        int nodeId = 0;
 
-        addEdge(3, 4, false, 1, 1);
-        addEdge(4, 5, false, 1, 1);
-        addEdge(5, 3, false, 1, 1);
+        for(int i = 0; i < numThreeCycles; i++) {
+            addEdge(nodeId, nodeId + 1, false, 1, 1);
+            addEdge(nodeId + 1, nodeId + 2, false, 1, 1);
+            addEdge(nodeId + 2, nodeId, false, 1, 1);
+            nodeId += 3;
+        }
 
-        runSolver(0, 6);
+        runSolver(0, 3 * numThreeCycles);
         assertHasSolution();
         assertSolution(3);
     }
@@ -208,24 +223,17 @@ public class SimpleGraphTests {
         assertSolution(8);
     }
 
-    private void printSolution() throws GRBException {
-        System.out.println("---- Final Solution ----");
-        double[] arcs = model.get(GRB.DoubleAttr.X, vars.getArcVars());
-
-        StringBuilder arcString = new StringBuilder();
-
-        for(int i = 0; i < arcs.length - 1; i += 2) {
-            arcString.append("(");
-            arcString.append(arcs[i]);
-            arcString.append(", ");
-            arcString.append(arcs[i + 1]);
-            arcString.append(") ");
+    @Test
+    public void threeNodeMultiEdgeGraph() throws GRBException {
+        addEdge(0, 1, false, 1, 1);
+        addEdge(2, 0, false, 1, 1);
+        for(int i = 0; i < 20; i++) {
+            addEdge(1, 2, true, 1, 1);
         }
-        System.out.println("Arcs: " + arcString.toString());
 
-        double[] verts = model.get(GRB.DoubleAttr.X, vars.getVertexVars());
-        System.out.println("Verts: " + Arrays.toString(verts));
-
+        runSolver(0, 10);
+        assertHasSolution();
+        assertSolution(9);
     }
 
     private void assertHasSolution() throws GRBException {
