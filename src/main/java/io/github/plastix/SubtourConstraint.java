@@ -27,10 +27,11 @@ public class SubtourConstraint extends GRBCallback {
                 IntHashSet visitedVertices = getReachableVertexSubset(START_NODE_ID);
                 int numVerticesInSolution = numVerticesInSolution();
 
-                System.out.println("-- Callback --");
-                System.out.println("Solution vertices: " + numVerticesInSolution);
-                System.out.println("Reachable vertices: " + visitedVertices.size());
-                System.out.println("Solution arcs: " + numArcsInSolution());
+//                System.out.println("-- Callback --");
+//                System.out.println("Solution vertices: " + numVerticesInSolution);
+//                System.out.println("Reachable vertices: " + visitedVertices.size());
+//                System.out.println("Solution arcs: " + numArcsInSolution());
+
 
                 // If the number of vertices we can reach from the start is not the number of vertices we
                 // visit in the entire solution, we have a disconnected tour
@@ -49,13 +50,12 @@ public class SubtourConstraint extends GRBCallback {
 
                         while(outgoing.next()) {
                             GRBVar var = vars.getArcVar(outgoing, false);
-                            subtourConstraint.addTerm(1, var);
+                            if(getSolution(var) > 0) {
+                                subtourConstraint.addTerm(1, var);
+                            }
                             totalOutgoingEdges += 1;
-
                             lhs += getSolution(var);
                         }
-
-
                         sumVertexVisits += getSolution(vars.getVertexVar(vertexId));
                     }
 
@@ -82,20 +82,6 @@ public class SubtourConstraint extends GRBCallback {
             }
         }
         return visited;
-    }
-
-    private IntHashSet verticesInSolution() throws GRBException {
-        double[] values = getSolution(vars.getVertexVars());
-
-        IntHashSet result = new IntHashSet();
-
-        for(int i = 0; i < values.length; i++) {
-            if(values[i] > 0) {
-                result.add(i);
-            }
-        }
-
-        return result;
     }
 
     private IntHashSet getReachableVertexSubset(int startNode) throws GRBException {

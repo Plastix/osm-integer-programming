@@ -1,6 +1,5 @@
 package io.github.plastix;
 
-import com.carrotsearch.hppc.IntHashSet;
 import com.graphhopper.routing.util.AllEdgesIterator;
 import com.graphhopper.storage.Graph;
 import com.graphhopper.util.EdgeIterator;
@@ -58,19 +57,14 @@ public class Constraints {
             // (1d)
             GRBLinExpr edgeCounts = new GRBLinExpr();
             EdgeIterator incoming = graphUtils.incomingEdges(i);
-//            System.out.println("Incoming: " + i);
             while(incoming.next()) {
                 edgeCounts.addTerm(1, vars.getArcVar(incoming, true));
-//                System.out.println("(Edge: " + incoming.getEdge() + ") " + incoming.getBaseNode() + " <- " + incoming.getAdjNode());
             }
 
             EdgeIterator outgoing = graphUtils.outgoingEdges(i);
-//            System.out.println("Outgoing: " + i);
             while(outgoing.next()) {
                 GRBVar arc = vars.getArcVar(outgoing, false);
                 edgeCounts.addTerm(-1, arc);
-
-//                System.out.println("(Edge: " + outgoing.getEdge() + ") " + outgoing.getBaseNode() + " -> " + outgoing.getAdjNode());
             }
 
             model.addConstr(edgeCounts, GRB.EQUAL, 0, "edge_counts");

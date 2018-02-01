@@ -140,6 +140,42 @@ public class SimpleGraphTests {
     }
 
     @Test
+    public void twoConnectedThreeCycles() throws GRBException {
+        addEdge(0, 1, false, 1, 1);
+        addEdge(1, 2, false, 1, 1);
+        addEdge(2, 0, false, 1, 1);
+
+        addEdge(2, 3, true, 2, 2);
+
+        addEdge(3, 4, false, 1, 1);
+        addEdge(4, 5, false, 1, 1);
+        addEdge(5, 3, false, 1, 1);
+
+        runSolver(0, 6);
+        assertHasSolution();
+        assertSolution(3);
+    }
+
+    @Test
+    public void sixCycleWithTwoThreeCycles() throws GRBException {
+        addEdge(0, 1, true, 1, 1);
+        addEdge(1, 2, true, 1, 1);
+        addEdge(2, 0, true, 1, 1);
+
+        addEdge(2, 3, true, 1, 1);
+        addEdge(1, 4, true, 1, 1);
+
+        addEdge(3, 4, true, 1, 1);
+        addEdge(4, 5, true, 1, 1);
+        addEdge(5, 3, true, 1, 1);
+
+        runSolver(0, 6);
+        assertHasSolution();
+        assertSolution(6);
+    }
+
+
+    @Test
     public void directedKFour() throws GRBException {
         addEdge(0, 1, false, 1, 2);
         addEdge(1, 2, false, 1, 2);

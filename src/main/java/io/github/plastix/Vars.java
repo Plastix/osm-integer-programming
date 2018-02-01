@@ -67,9 +67,6 @@ public class Vars {
             if(!graphUtils.isBackward(edges)) {
                 backward.set(GRB.DoubleAttr.UB, 0);
             }
-
-//            System.out.println(edgeId + ": " + baseNode + " -> " + edges.getAdjNode() + " " +
-//                    graphUtils.isForward(edges) + " " + graphUtils.isBackward(edges));
         }
     }
 

@@ -9,7 +9,6 @@ import com.graphhopper.routing.util.FlagEncoder;
 import com.graphhopper.routing.weighting.Weighting;
 import com.graphhopper.storage.Graph;
 import com.graphhopper.storage.index.QueryResult;
-import gurobi.GRB;
 import gurobi.GRBEnv;
 import gurobi.GRBException;
 import gurobi.GRBModel;
@@ -42,7 +41,7 @@ public class Main {
         System.out.println("Start position: " + params.getStartLat() + ", " + params.getStartLon() +
                 " (Node " + START_NODE_ID + ")");
 
-        model.set(GRB.IntParam.LogToConsole, 0);
+//        model.set(GRB.IntParam.LogToConsole, 0);
         model.optimize();
 
         env.dispose();
