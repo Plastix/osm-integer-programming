@@ -153,6 +153,25 @@ public class SimpleGraphTests {
         assertSolution(8);
     }
 
+    @Test
+    public void simpleDirectedCactusGraph() throws GRBException {
+        addEdge(0, 1, false, 1, 1);
+        addEdge(1, 2, false, 1, 1);
+        addEdge(2, 0, false, 1, 1);
+
+        addEdge(1, 3, false, 1, 1);
+        addEdge(3, 4, false, 1, 3);
+        addEdge(4, 1, false, 1, 1);
+
+        addEdge(2, 5, false, 1, 1);
+        addEdge(5, 6, false, 1, 1);
+        addEdge(6, 2, false, 1, 1);
+
+        runSolver(0, 6);
+        assertHasSolution();
+        assertSolution(8);
+    }
+
     private void printSolution() throws GRBException {
         System.out.println("---- Final Solution ----");
         double[] arcs = model.get(GRB.DoubleAttr.X, vars.getArcVars());
