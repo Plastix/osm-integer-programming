@@ -1,6 +1,9 @@
 import com.carrotsearch.hppc.IntDoubleHashMap;
 import com.carrotsearch.hppc.IntDoubleMap;
-import com.graphhopper.routing.util.*;
+import com.graphhopper.routing.util.EncodingManager;
+import com.graphhopper.routing.util.FlagEncoder;
+import com.graphhopper.routing.util.HintsMap;
+import com.graphhopper.routing.util.RacingBikeFlagEncoder;
 import com.graphhopper.routing.weighting.Weighting;
 import com.graphhopper.storage.GraphBuilder;
 import com.graphhopper.storage.GraphHopperStorage;
@@ -9,7 +12,6 @@ import gurobi.GRB;
 import gurobi.GRBEnv;
 import gurobi.GRBException;
 import gurobi.GRBModel;
-import io.github.plastix.BikePriorityWeighting;
 import io.github.plastix.Constraints;
 import io.github.plastix.GraphUtils;
 import io.github.plastix.Vars;
@@ -71,9 +73,23 @@ public class SimpleGraphTests {
         model.optimize();
     }
 
+    @Test(expected = IllegalArgumentException.class)
+    public void emptyGraph() throws GRBException {
+        // Fails to run since we don't have a node ID (0)
+        runSolver(0, 1);
+    }
+
     @Test
-    public void singleArcGraph() throws GRBException {
+    public void singleDirectedArcGraph() throws GRBException {
         addEdge(0, 1, false, 1, 1);
+
+        runSolver(0, 2);
+        assertNoSolution();
+    }
+
+    @Test
+    public void singleUndirectedArcGraph() throws GRBException {
+        addEdge(0, 1, true, 1, 1);
 
         runSolver(0, 2);
         assertNoSolution();
@@ -96,7 +112,7 @@ public class SimpleGraphTests {
 
         runSolver(0, 3);
         assertHasSolution();
-        assertSolution(3);
+        assertSolution(3, 3);
     }
 
     @Test
@@ -107,7 +123,7 @@ public class SimpleGraphTests {
 
         runSolver(0, 3);
         assertHasSolution();
-        assertSolution(3);
+        assertSolution(3, 3);
     }
 
     @Test
@@ -134,7 +150,7 @@ public class SimpleGraphTests {
 
         runSolver(0, 3);
         assertHasSolution();
-        assertSolution(3);
+        assertSolution(3, 3);
     }
 
     @Test
@@ -151,7 +167,7 @@ public class SimpleGraphTests {
 
         runSolver(0, 3 * numThreeCycles);
         assertHasSolution();
-        assertSolution(3);
+        assertSolution(3, 3);
     }
 
     @Test
@@ -168,7 +184,7 @@ public class SimpleGraphTests {
 
         runSolver(0, 6);
         assertHasSolution();
-        assertSolution(3);
+        assertSolution(3, 3);
     }
 
     @Test
@@ -186,7 +202,7 @@ public class SimpleGraphTests {
 
         runSolver(0, 6);
         assertHasSolution();
-        assertSolution(6);
+        assertSolution(6, 6);
     }
 
 
@@ -201,7 +217,7 @@ public class SimpleGraphTests {
 
         runSolver(0, 4);
         assertHasSolution();
-        assertSolution(8);
+        assertSolution(8, 4);
     }
 
     @Test
@@ -220,7 +236,7 @@ public class SimpleGraphTests {
 
         runSolver(0, 6);
         assertHasSolution();
-        assertSolution(8);
+        assertSolution(8, 6);
     }
 
     @Test
@@ -233,7 +249,7 @@ public class SimpleGraphTests {
 
         runSolver(0, 10);
         assertHasSolution();
-        assertSolution(9);
+        assertSolution(9, 9);
     }
 
     private void assertHasSolution() throws GRBException {
@@ -248,9 +264,9 @@ public class SimpleGraphTests {
         }
     }
 
-    private void assertSolution(double score) throws GRBException {
-        double actualScore = model.get(GRB.DoubleAttr.ObjVal);
-        assertEquals(score, actualScore, FP_PRECISION);
+    private void assertSolution(double score, double cost) throws GRBException {
+        assertEquals(score, constraints.getObjective().getValue(), FP_PRECISION);
+        assertEquals(cost, constraints.getMaxCostConstraint().getValue(), FP_PRECISION);
     }
 
     private static class TestWeighting implements Weighting {

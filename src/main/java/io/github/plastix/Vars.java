@@ -12,7 +12,6 @@ import gurobi.GRBException;
 import gurobi.GRBModel;
 import gurobi.GRBVar;
 
-import java.util.ArrayList;
 import java.util.Arrays;
 
 public class Vars {
@@ -84,6 +83,9 @@ public class Vars {
     }
 
     public GRBVar getVertexVar(int id) {
+        if(id < 0 || id >= graph.getNodes()) {
+            throw new IllegalArgumentException(String.format("Invalid node id %d", id));
+        }
         return verts[id];
     }
 

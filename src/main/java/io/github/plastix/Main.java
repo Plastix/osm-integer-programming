@@ -3,12 +3,10 @@ package io.github.plastix;
 import com.graphhopper.GraphHopper;
 import com.graphhopper.reader.osm.GraphHopperOSM;
 import com.graphhopper.routing.util.AllEdgesIterator;
-import com.graphhopper.routing.util.DefaultEdgeFilter;
 import com.graphhopper.routing.util.EncodingManager;
 import com.graphhopper.routing.util.FlagEncoder;
 import com.graphhopper.routing.weighting.Weighting;
 import com.graphhopper.storage.Graph;
-import com.graphhopper.storage.index.QueryResult;
 import gurobi.GRBEnv;
 import gurobi.GRBException;
 import gurobi.GRBModel;
@@ -65,7 +63,7 @@ public class Main {
         Weighting weighting = new BikePriorityWeighting(flagEncoder);
         graph = hopper.getGraphHopperStorage();
         graphUtils = new GraphUtils(graph, flagEncoder, weighting);
-        START_NODE_ID = getStartNode(flagEncoder);
+        START_NODE_ID = params.getStartNode(hopper.getLocationIndex(), flagEncoder);
 
         AllEdgesIterator edges = graph.getAllEdges();
         int nonTraversable = 0;
@@ -78,15 +76,6 @@ public class Main {
         System.out.println("\n---- OSM Graph Loaded ----");
         System.out.println(String.format("Edges: %d\nNodes: %d\nNon-traversable edges: %d\nOne-way edges: %d\n",
                 graph.getAllEdges().getMaxId(), graph.getNodes(), nonTraversable, oneWay));
-    }
-
-    private static int getStartNode(FlagEncoder flagEncoder) {
-        QueryResult result = hopper.getLocationIndex().findClosest(params.getStartLat(), params.getStartLon(),
-                new DefaultEdgeFilter(flagEncoder));
-        if(!result.isValid()) {
-            throw new RuntimeException("Unable to find node at start lat/lon!");
-        }
-        return result.getClosestNode();
     }
 
     public static void main(String[] args) {

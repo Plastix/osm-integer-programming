@@ -12,6 +12,9 @@ public class Constraints {
     private Vars vars;
     private GraphUtils graphUtils;
 
+    private GRBLinExpr maxCostConstraint;
+    private GRBLinExpr objective;
+
     public Constraints(Graph graph, GRBModel model, Vars vars, GraphUtils graphUtils) {
         this.graph = graph;
         this.model = model;
@@ -23,11 +26,11 @@ public class Constraints {
 
         // (1a)
         // Objective maximizes total collected score of all roads
-        GRBLinExpr objective = new GRBLinExpr();
+        objective = new GRBLinExpr();
 
         // (1b)
         // Limit length of path
-        GRBLinExpr maxCostConstraint = new GRBLinExpr();
+        maxCostConstraint = new GRBLinExpr();
 
         AllEdgesIterator edges = graph.getAllEdges();
         while(edges.next()) {
@@ -88,5 +91,13 @@ public class Constraints {
         // Must set LazyConstraints parameter when using lazy constraints
         model.set(GRB.IntParam.LazyConstraints, 1);
         model.setCallback(new SubtourConstraint(vars, startNodeId, graphUtils));
+    }
+
+    public GRBLinExpr getMaxCostConstraint() {
+        return maxCostConstraint;
+    }
+
+    public GRBLinExpr getObjective() {
+        return objective;
     }
 }
