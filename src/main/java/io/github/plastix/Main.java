@@ -7,6 +7,7 @@ import com.graphhopper.routing.util.EncodingManager;
 import com.graphhopper.routing.util.FlagEncoder;
 import com.graphhopper.routing.weighting.Weighting;
 import com.graphhopper.storage.Graph;
+import gurobi.GRB;
 import gurobi.GRBEnv;
 import gurobi.GRBException;
 import gurobi.GRBModel;
@@ -24,13 +25,15 @@ public class Main {
     // Solver variables
     private static GRBEnv env;
     private static GRBModel model;
+    private static Vars vars;
+    private static Constraints constraints;
 
     private static void setupSolver() throws GRBException {
         env = new GRBEnv("osm.log");
         model = new GRBModel(env);
-        Vars vars = new Vars(graph, model, graphUtils);
+        vars = new Vars(graph, model, graphUtils);
+        constraints = new Constraints(graph, model, vars, graphUtils);
         vars.addVarsToModel();
-        Constraints constraints = new Constraints(graph, model, vars, graphUtils);
         constraints.setupConstraints(START_NODE_ID, params.getMaxCost());
     }
 
@@ -41,6 +44,11 @@ public class Main {
 
 //        model.set(GRB.IntParam.LogToConsole, 0);
         model.optimize();
+
+        if(model.get(GRB.IntAttr.Status) == GRB.Status.OPTIMAL) {
+            System.out.println("Route score: " + constraints.getObjective().getValue());
+            System.out.println("Route distance: " + constraints.getMaxCostConstraint().getValue());
+        }
 
         model.dispose();
         env.dispose();
