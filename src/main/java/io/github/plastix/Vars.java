@@ -4,6 +4,7 @@ import com.carrotsearch.hppc.IntIntHashMap;
 import com.carrotsearch.hppc.IntIntMap;
 import com.carrotsearch.hppc.IntObjectHashMap;
 import com.carrotsearch.hppc.IntObjectMap;
+import com.carrotsearch.hppc.cursors.IntCursor;
 import com.graphhopper.routing.util.AllEdgesIterator;
 import com.graphhopper.storage.Graph;
 import com.graphhopper.util.EdgeIterator;
@@ -50,11 +51,12 @@ public class Vars {
             int edgeId = edges.getEdge();
             int baseNode = edges.getBaseNode();
             arcBaseIds.put(edgeId, baseNode);
+            int adjNode = edges.getAdjNode();
 
             // Make a decision variable for every arc in our graph
             // arcs[i] = 1 if arc is travelled, 0 otherwise
-            GRBVar forward = model.addVar(0, 1, 0, GRB.BINARY, "forward_" + edgeId);
-            GRBVar backward = model.addVar(0, 1, 0, GRB.BINARY, "backward_" + edgeId);
+            GRBVar forward = model.addVar(0, 1, 0, GRB.BINARY, "forward_" + edgeId + "|" + baseNode + "->" + edges.getAdjNode());
+            GRBVar backward = model.addVar(0, 1, 0, GRB.BINARY, "backward_" + edgeId + "|" + baseNode + "->" + edges.getAdjNode());
 
             forwardArcs.put(edgeId, forward);
             backwardArcs.put(edgeId, backward);
@@ -91,5 +93,17 @@ public class Vars {
 
     public GRBVar[] getVertexVars() {
         return verts;
+    }
+
+    public GRBVar[] getArcVars() {
+        GRBVar[] result = new GRBVar[forwardArcs.values().size() * 2];
+
+        int j = 0;
+        for(IntCursor intCursor : forwardArcs.keys()) {
+            result[j++] = forwardArcs.get(intCursor.value);
+            result[j++] = backwardArcs.get(intCursor.value);
+        }
+
+        return result;
     }
 }

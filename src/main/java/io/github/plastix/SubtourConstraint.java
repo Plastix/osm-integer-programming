@@ -7,6 +7,8 @@ import com.graphhopper.util.EdgeExplorer;
 import com.graphhopper.util.EdgeIterator;
 import gurobi.*;
 
+import java.util.Arrays;
+
 public class SubtourConstraint extends GRBCallback {
 
     private final int START_NODE_ID;
@@ -24,13 +26,19 @@ public class SubtourConstraint extends GRBCallback {
         try {
             if(where == GRB.CB_MIPSOL) { // Found an integer feasible solution
 
+                IntHashSet solutionVertices = getSolutionVertices();
                 IntHashSet visitedVertices = getReachableVertexSubset(START_NODE_ID);
-                int numVerticesInSolution = numVerticesInSolution();
+
+//                System.out.println("--- Callback ---");
+//                System.out.println("Verts in solution: " + numVerticesInSolution);
+//                System.out.println(solutionVertices);
+//                System.out.println("Reachable vertices: " + visitedVertices.size());
+//                printSolution();
 
                 // If the number of vertices we can reach from the start is not the number of vertices we
                 // visit in the entire solution, we have a disconnected tour
-                if(visitedVertices.size() < numVerticesInSolution) {
-                    visitedVertices.remove(START_NODE_ID);
+                if(visitedVertices.size() < solutionVertices.size()) {
+                    solutionVertices.removeAll(visitedVertices);
 
                     // Add sub-tour elimination constraint
                     GRBLinExpr subtourConstraint = new GRBLinExpr();
@@ -38,24 +46,24 @@ public class SubtourConstraint extends GRBCallback {
                     int totalOutgoingEdges = 0;
 
                     double lhs = 0;
-                    for(IntCursor cursor : visitedVertices) {
+                    for(IntCursor cursor : solutionVertices) {
                         int vertexId = cursor.value;
                         EdgeIterator outgoing = graphUtils.outgoingEdges(vertexId);
 
                         while(outgoing.next()) {
                             GRBVar var = vars.getArcVar(outgoing, false);
-                            if(getSolution(var) > 0) {
+                            if(!solutionVertices.contains(outgoing.getAdjNode())) {
                                 subtourConstraint.addTerm(1, var);
+                                lhs += getSolution(var);
                             }
                             totalOutgoingEdges += 1;
-                            lhs += getSolution(var);
                         }
                         sumVertexVisits += getSolution(vars.getVertexVar(vertexId));
                     }
 
                     double rhs = ((double) sumVertexVisits) / ((double) totalOutgoingEdges);
-                    System.out.println("adding lazy constraint! " + lhs + " <= " + rhs);
-                    addLazy(subtourConstraint, GRB.LESS_EQUAL, rhs);
+                    System.out.println("adding lazy constraint! " + lhs + " >= " + rhs);
+                    addLazy(subtourConstraint, GRB.GREATER_EQUAL, rhs);
 
                 }
             }
@@ -66,16 +74,17 @@ public class SubtourConstraint extends GRBCallback {
         }
     }
 
-    private int numVerticesInSolution() throws GRBException {
-        double[] values = getSolution(vars.getVertexVars());
+    private IntHashSet getSolutionVertices() throws GRBException {
+        IntHashSet result = new IntHashSet();
+        GRBVar[] verts = vars.getVertexVars();
+        double[] values = getSolution(verts);
 
-        int visited = 0;
-        for(double value : values) {
-            if(value > 0) {
-                visited++;
+        for(int i = 0; i < verts.length; i++) {
+            if(values[i] > 0) {
+                result.add(i);
             }
         }
-        return visited;
+        return result;
     }
 
     private IntHashSet getReachableVertexSubset(int startNode) throws GRBException {
@@ -100,5 +109,24 @@ public class SubtourConstraint extends GRBCallback {
         }
 
         return explored;
+    }
+
+    private void printSolution() throws GRBException {
+        GRBVar[] arcVars = vars.getArcVars();
+        double[] values = getSolution(arcVars);
+
+        StringBuilder arcString = new StringBuilder();
+
+        for(int i = 0; i < arcVars.length - 1; i++) {
+            arcString.append(values[i]);
+            arcString.append(", ");
+            arcString.append(arcVars[i].get(GRB.StringAttr.VarName));
+            if(i < arcVars.length - 2) {
+                arcString.append("\n");
+            }
+        }
+        System.out.println("Arcs: " + arcString.toString());
+        double[] verts = getSolution(vars.getVertexVars());
+        System.out.println("Verts: " + Arrays.toString(verts));
     }
 }

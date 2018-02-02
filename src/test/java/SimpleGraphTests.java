@@ -8,16 +8,15 @@ import com.graphhopper.routing.weighting.Weighting;
 import com.graphhopper.storage.GraphBuilder;
 import com.graphhopper.storage.GraphHopperStorage;
 import com.graphhopper.util.EdgeIteratorState;
-import gurobi.GRB;
-import gurobi.GRBEnv;
-import gurobi.GRBException;
-import gurobi.GRBModel;
+import gurobi.*;
 import io.github.plastix.Constraints;
 import io.github.plastix.GraphUtils;
 import io.github.plastix.Vars;
 import org.junit.After;
 import org.junit.Before;
 import org.junit.Test;
+
+import java.util.Arrays;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.fail;
@@ -202,6 +201,7 @@ public class SimpleGraphTests {
 
         runSolver(0, 6);
         assertHasSolution();
+        printSolution();
         assertSolution(6, 6);
     }
 
@@ -251,6 +251,25 @@ public class SimpleGraphTests {
         assertHasSolution();
         assertSolution(9, 9);
     }
+
+    private void printSolution() throws GRBException {
+        System.out.println("---- Final Solution ----");
+        GRBVar[] arcVars = vars.getArcVars();
+        double[] values = model.get(GRB.DoubleAttr.X, arcVars);
+
+        StringBuilder arcString = new StringBuilder();
+
+        for(int i = 0; i < arcVars.length - 1; i++) {
+            arcString.append(values[i]);
+            arcString.append(", ");
+            arcString.append(arcVars[i].get(GRB.StringAttr.VarName));
+            arcString.append("\n");
+        }
+        System.out.println("Arcs: " + arcString.toString());
+        double[] verts = model.get(GRB.DoubleAttr.X, vars.getVertexVars());
+        System.out.println("Verts: " + Arrays.toString(verts));
+    }
+
 
     private void assertHasSolution() throws GRBException {
         if(model.get(GRB.IntAttr.Status) != GRB.Status.OPTIMAL) {
