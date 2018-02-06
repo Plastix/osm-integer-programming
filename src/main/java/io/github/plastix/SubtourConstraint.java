@@ -17,7 +17,7 @@ public class SubtourConstraint extends GRBCallback {
     private final int START_NODE_ID;
     private GraphUtils graphUtils;
     private Vars vars;
-    private double time = 0;
+    private long time = 0;
 
     SubtourConstraint(Vars vars, int startNodeId, GraphUtils graphUtils) {
         this.vars = vars;
@@ -72,11 +72,11 @@ public class SubtourConstraint extends GRBCallback {
                 }
 
                 long end = System.nanoTime();
-                time += TimeUnit.NANOSECONDS.toSeconds(end - start);
+                time += end - start;
 
                 double solverTime = getDoubleInfo(RUNTIME);
                 if(solverTime > 600) {
-                    System.out.println(String.format("Lazy constraint time: %f s", time));
+                    System.out.println(String.format("Lazy constraint time: %d s", TimeUnit.NANOSECONDS.toSeconds(time)));
                     System.out.println(String.format("Gurobi wall time: %f s", solverTime));
                     System.exit(0);
                 }
