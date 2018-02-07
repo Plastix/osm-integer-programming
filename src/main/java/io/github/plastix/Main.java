@@ -43,6 +43,7 @@ public class Main {
                 " (Node " + START_NODE_ID + ")");
 
 //        model.set(GRB.IntParam.LogToConsole, 0);
+        model.set(GRB.IntParam.Threads, params.getNumThreads());
         model.optimize();
 
         if(model.get(GRB.IntAttr.Status) == GRB.Status.OPTIMAL) {

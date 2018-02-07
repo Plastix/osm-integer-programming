@@ -138,6 +138,8 @@ gradle-app.setting
 
 # Ignore GraphHopper generated files
 src/main/resources/ny_capital_district-gh
+src/main/resources/galway_ny-gh
+
 
 # Ignore Google Optimization Tools libs
 /libs/

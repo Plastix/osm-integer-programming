@@ -62,7 +62,7 @@ public class SubtourConstraint extends GRBCallback {
                     }
 
                     double rhs = ((double) sumVertexVisits) / ((double) totalOutgoingEdges);
-                    System.out.println("adding lazy constraint! " + lhs + " >= " + rhs);
+//                    System.out.println("adding lazy constraint! " + lhs + " >= " + rhs);
                     addLazy(subtourConstraint, GRB.GREATER_EQUAL, rhs);
 
                 }
