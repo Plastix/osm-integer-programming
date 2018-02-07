@@ -8,7 +8,6 @@ import com.graphhopper.util.EdgeIterator;
 import gurobi.*;
 
 import java.util.Arrays;
-import java.util.concurrent.TimeUnit;
 
 import static gurobi.GRB.Callback.RUNTIME;
 
@@ -17,7 +16,7 @@ public class SubtourConstraint extends GRBCallback {
     private final int START_NODE_ID;
     private GraphUtils graphUtils;
     private Vars vars;
-    private long time = 0;
+    private double time = 0;
 
     SubtourConstraint(Vars vars, int startNodeId, GraphUtils graphUtils) {
         this.vars = vars;
@@ -29,7 +28,7 @@ public class SubtourConstraint extends GRBCallback {
     protected void callback() {
         try {
             if(where == GRB.CB_MIPSOL) { // Found an integer feasible solution
-                long start = System.currentTimeMillis();
+                long start = System.nanoTime();
                 IntHashSet solutionVertices = getSolutionVertices();
                 IntHashSet visitedVertices = getReachableVertexSubset(START_NODE_ID);
 
@@ -71,12 +70,12 @@ public class SubtourConstraint extends GRBCallback {
 
                 }
 
-                long end = System.currentTimeMillis();
-                time += end - start;
-
+                long end = System.nanoTime();
+                double sec = (end - start) / 1000000000.0;
+                time += sec;
                 double solverTime = getDoubleInfo(RUNTIME);
                 if(solverTime > 3600) {
-                    System.out.println(String.format("Lazy constraint time: %d s", TimeUnit.MILLISECONDS.toSeconds(time)));
+                    System.out.println(String.format("Lazy constraint time: %f s", time));
                     System.out.println(String.format("Gurobi wall time: %f s", solverTime));
                     System.exit(0);
                 }
