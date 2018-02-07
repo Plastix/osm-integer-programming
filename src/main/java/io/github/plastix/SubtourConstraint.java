@@ -29,7 +29,7 @@ public class SubtourConstraint extends GRBCallback {
     protected void callback() {
         try {
             if(where == GRB.CB_MIPSOL) { // Found an integer feasible solution
-                long start = System.nanoTime();
+                long start = System.currentTimeMillis();
                 IntHashSet solutionVertices = getSolutionVertices();
                 IntHashSet visitedVertices = getReachableVertexSubset(START_NODE_ID);
 
@@ -71,12 +71,12 @@ public class SubtourConstraint extends GRBCallback {
 
                 }
 
-                long end = System.nanoTime();
+                long end = System.currentTimeMillis();
                 time += end - start;
 
                 double solverTime = getDoubleInfo(RUNTIME);
-                if(solverTime > 600) {
-                    System.out.println(String.format("Lazy constraint time: %d s", TimeUnit.NANOSECONDS.toSeconds(time)));
+                if(solverTime > 3600) {
+                    System.out.println(String.format("Lazy constraint time: %d s", TimeUnit.MILLISECONDS.toSeconds(time)));
                     System.out.println(String.format("Gurobi wall time: %f s", solverTime));
                     System.exit(0);
                 }
